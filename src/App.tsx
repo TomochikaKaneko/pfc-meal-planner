@@ -1,6 +1,6 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BookOpen, ChefHat, Home, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, ChefHat, Home, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
 import type { ConditionTag, Food, FoodCategory, MacroKey, MealCandidate, MealInput } from './types';
@@ -55,8 +55,15 @@ export function App() {
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadJson(USER_FOODS_KEY, []));
   const [results, setResults] = useState<MealCandidate[]>([]);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
+  const [updateReady, setUpdateReady] = useState(false);
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
+
+  useEffect(() => {
+    const showUpdate = () => setUpdateReady(true);
+    window.addEventListener('pwa-update-ready', showUpdate);
+    return () => window.removeEventListener('pwa-update-ready', showUpdate);
+  }, []);
 
   function updateInput(key: MacroKey, rawValue: string) {
     const next = { ...mealInput, [key]: parseMacroValue(rawValue) };
@@ -135,6 +142,16 @@ export function App() {
           <ChefHat size={24} />
         </div>
       </header>
+
+      {updateReady && (
+        <div className="update-banner" role="status">
+          <span>新しいバージョンを読み込みました。再読み込みしてください。</span>
+          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('pwa-apply-update'))}>
+            <RefreshCw size={16} />
+            更新
+          </button>
+        </div>
+      )}
 
       <main className="screen">
         {tab === 'home' && (
