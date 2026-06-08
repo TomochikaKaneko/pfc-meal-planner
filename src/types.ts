@@ -7,6 +7,13 @@ export type FoodCategory =
   | 'soup'
   | 'seasoning';
 
+export type RecipeCategory =
+  | 'staple'
+  | 'main'
+  | 'side'
+  | 'soup'
+  | 'drink';
+
 export type ConditionTag =
   | 'white-rice'
   | 'barley'
@@ -44,12 +51,34 @@ export interface MealInput extends MacroProfile {
   tags: ConditionTag[];
 }
 
-export interface MealItem {
+export interface RecipeIngredient {
+  foodId: string;
+  serving: number;
+}
+
+export interface Recipe {
+  id: string;
+  name: string;
+  category: RecipeCategory;
+  ingredients: RecipeIngredient[];
+  tags: string[];
+  description: string;
+  cookingTime: number;
+  difficulty: 'easy' | 'normal';
+  recipeUrl: string;
+}
+
+export interface MealIngredient {
   food: Food;
-  role: string;
-  dishName: string;
   serving: number;
   amount: string;
+  macros: MacroProfile;
+}
+
+export interface MealItem {
+  recipe: Recipe;
+  role: string;
+  ingredients: MealIngredient[];
   macros: MacroProfile;
 }
 
@@ -57,7 +86,6 @@ export interface MealCandidate {
   id: string;
   templateName: string;
   title: string;
-  dishName: string;
   items: MealItem[];
   totals: MacroProfile;
   diff: MacroProfile;

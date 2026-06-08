@@ -31,6 +31,19 @@ const foodSeeds: FoodSeed[] = [
     source: 'initial',
   },
   {
+    id: 'oatmeal',
+    name: 'オートミール',
+    category: 'staple',
+    standardAmount: '30g',
+    kcal: 114,
+    protein: 4.1,
+    fat: 1.7,
+    carb: 20.7,
+    tags: ['oatmeal', 'breakfast', 'fiber'],
+    pairsWith: ['プロテイン', '卵', 'ツナ水煮'],
+    source: 'initial',
+  },
+  {
     id: 'spaghetti',
     name: 'スパゲッティ',
     category: 'staple',
@@ -464,6 +477,7 @@ const foodSeeds: FoodSeed[] = [
 const servingRules: Record<string, ServingRule> = {
   'white-rice': { baseServing: 150, servingUnit: 'g', minServing: 100, maxServing: 250, step: 10 },
   barley: { baseServing: 10, servingUnit: 'g', minServing: 5, maxServing: 10, step: 5 },
+  oatmeal: { baseServing: 30, servingUnit: 'g', minServing: 20, maxServing: 60, step: 5 },
   spaghetti: { baseServing: 80, servingUnit: 'g', minServing: 60, maxServing: 100, step: 10 },
   bread: { baseServing: 1, servingUnit: '枚', minServing: 1, maxServing: 2, step: 1 },
   udon: { baseServing: 1, servingUnit: '玉', minServing: 1, maxServing: 1, step: 1 },

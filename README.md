@@ -41,6 +41,12 @@ npm run build
 
 アプリ内の食品登録画面から追加した食品は、初期 DB とは別に localStorage に保存されます。
 
+## 料理DBの追加方法
+
+初期料理 DB は `src/data/recipes.ts` の `initialRecipes` に定義しています。料理は `id`、`name`、`category`、`ingredients`、`tags`、`description`、`cookingTime`、`difficulty`、`recipeUrl` を持ちます。
+
+`ingredients` は食品 DB の `foodId` と分量を参照します。`recipeUrl` は将来のレシピサイト連携用で、現時点では空文字でも構いません。
+
 ## localStorage保存内容
 
 - `pfc-meal-planner:user-foods`: ユーザー追加食品の配列

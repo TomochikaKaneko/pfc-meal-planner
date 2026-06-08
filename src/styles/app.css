@@ -330,20 +330,36 @@ button {
 
 .meal-item {
   display: grid;
-  grid-template-columns: 54px 1fr auto;
-  align-items: center;
+  grid-template-columns: 54px 1fr;
+  align-items: start;
   gap: 8px;
-  min-height: 42px;
+  min-height: 50px;
   padding: 8px 10px;
   border-radius: 8px;
   background: #f4f8f5;
 }
 
-.meal-item span,
-.meal-item small {
+.meal-item span {
   color: #65796f;
   font-size: 0.76rem;
   font-weight: 800;
+}
+
+.meal-item strong,
+.meal-item small {
+  display: block;
+}
+
+.meal-item strong {
+  line-height: 1.35;
+}
+
+.meal-item small {
+  margin-top: 3px;
+  color: #65796f;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.35;
 }
 
 .macro-strip {

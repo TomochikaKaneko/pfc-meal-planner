@@ -413,17 +413,19 @@ function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
             候補 {rank} / {meal.templateName}
           </p>
           <h3>{meal.title}</h3>
-          <p className="dish-name">料理名: {meal.dishName}</p>
+          <p className="dish-name">料理ベースの献立</p>
         </div>
         <span className="score">{Math.round(meal.score)}</span>
       </div>
 
       <div className="meal-items">
         {meal.items.map((item) => (
-          <div className="meal-item" key={`${meal.id}-${item.role}-${item.food.id}`}>
+          <div className="meal-item" key={`${meal.id}-${item.role}-${item.recipe.id}`}>
             <span>{item.role}</span>
-            <strong>{item.food.name}</strong>
-            <small>{item.amount}</small>
+            <div>
+              <strong>{item.recipe.name}</strong>
+              <small>{item.ingredients.map((ingredient) => `${ingredient.food.name} ${ingredient.amount}`).join(' / ')}</small>
+            </div>
           </div>
         ))}
       </div>
