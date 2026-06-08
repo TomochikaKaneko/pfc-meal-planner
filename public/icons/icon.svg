@@ -1,10 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PFC Meal Planner icon">
-  <rect width="512" height="512" rx="112" fill="#2f7d68"/>
-  <circle cx="256" cy="256" r="152" fill="#f8fbf8"/>
-  <path fill="#f07a4f" d="M160 260c0-53 43-96 96-96s96 43 96 96v24H160v-24Z"/>
-  <path fill="#2f7d68" d="M177 304h158c-12 42-43 72-79 72s-67-30-79-72Z"/>
-  <circle cx="206" cy="246" r="18" fill="#f8fbf8"/>
-  <circle cx="256" cy="224" r="18" fill="#f8fbf8"/>
-  <circle cx="306" cy="246" r="18" fill="#f8fbf8"/>
-  <path fill="#17342c" d="M178 288h156v24H178z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PFC meal support icon">
+  <rect width="512" height="512" rx="112" fill="#2F7D68"/>
+  <circle cx="256" cy="256" r="164" fill="#F8FBF8"/>
+  <circle cx="256" cy="256" r="112" fill="#FFFFFF" stroke="#DCE9E1" stroke-width="16"/>
+  <path d="M171 156v102" stroke="#1E3E35" stroke-width="18" stroke-linecap="round"/>
+  <path d="M145 158v58M171 158v58M197 158v58" stroke="#1E3E35" stroke-width="14" stroke-linecap="round"/>
+  <path d="M349 153c-28 28-40 72-24 106" stroke="#1E3E35" stroke-width="18" stroke-linecap="round"/>
+  <path d="M326 260v96" stroke="#1E3E35" stroke-width="18" stroke-linecap="round"/>
+  <path d="M209 269l34 34 70-80" fill="none" stroke="#2F7D68" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="256" cy="256" r="186" fill="none" stroke="#76B89F" stroke-width="12" opacity=".9"/>
 </svg>

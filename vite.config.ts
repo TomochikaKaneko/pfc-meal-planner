@@ -8,11 +8,11 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: null,
-      includeAssets: ['icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: ['icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'],
       manifest: {
-        name: 'PFC Meal Planner',
-        short_name: 'PFC Meal',
-        description: '残りカロリーとPFCから現実的な献立候補を提案するスマホ専用PWA',
+        name: 'PFC献立サポート',
+        short_name: 'PFC献立サポート',
+        description: '残りカロリーとPFCから現実的な献立を提案するアプリ',
         start_url: '/',
         lang: 'ja',
         scope: '/',
@@ -38,6 +38,11 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable',
+          },
+          {
+            src: '/icons/apple-touch-icon.png',
+            sizes: '180x180',
+            type: 'image/png',
           },
         ],
       },

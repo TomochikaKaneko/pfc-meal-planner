@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="app-shell">
         <main className="error-screen">
-          <h1>PFC Meal Planner</h1>
+          <h1>PFC献立サポート</h1>
           <p>新しいバージョンを読み込みました。再読み込みしてください。</p>
           <button type="button" onClick={() => window.location.reload()}>
             再読み込み

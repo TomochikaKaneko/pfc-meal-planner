@@ -56,6 +56,8 @@ export function App() {
   const [results, setResults] = useState<MealCandidate[]>([]);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
   const [updateReady, setUpdateReady] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [numericInputFocused, setNumericInputFocused] = useState(false);
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
 
@@ -63,6 +65,13 @@ export function App() {
     const showUpdate = () => setUpdateReady(true);
     window.addEventListener('pwa-update-ready', showUpdate);
     return () => window.removeEventListener('pwa-update-ready', showUpdate);
+  }, []);
+
+  useEffect(() => {
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    setIsStandalone(standalone);
   }, []);
 
   function updateInput(key: MacroKey, rawValue: string) {
@@ -136,7 +145,7 @@ export function App() {
       <header className="app-header">
         <div>
           <p className="eyebrow">PWA meal assistant</p>
-          <h1>PFC Meal Planner</h1>
+          <h1>PFC献立サポート</h1>
         </div>
         <div className="app-mark" aria-hidden="true">
           <ChefHat size={24} />
@@ -164,6 +173,14 @@ export function App() {
               <Sparkles size={26} />
             </div>
 
+            {!isStandalone && (
+              <section className="install-tip">
+                <strong>ホーム画面に追加するとアプリのように利用できます</strong>
+                <p>iPhone: Safari → 共有 → ホーム画面に追加</p>
+                <p>Android: Chrome → メニュー → ホーム画面に追加</p>
+              </section>
+            )}
+
             <div className="macro-grid">
               {macroFields.map((field) => (
                 <MacroInput
@@ -172,10 +189,11 @@ export function App() {
                   unit={field.unit}
                   value={mealInput[field.key]}
                   onChange={(value) => updateInput(field.key, value)}
+                  onFocus={() => setNumericInputFocused(true)}
+                  onBlur={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
                 />
               ))}
             </div>
-            <DoneButton />
 
             <section className="panel">
               <div className="section-title">
@@ -260,13 +278,14 @@ export function App() {
                 {macroFields.map((field) => (
                   <MacroInput
                     key={field.key}
-                    label={field.label}
-                    value={foodForm[field.key]}
-                    onChange={(value) => setFoodForm({ ...foodForm, [field.key]: parseMacroValue(value) })}
+                  label={field.label}
+                  value={foodForm[field.key]}
+                  onChange={(value) => setFoodForm({ ...foodForm, [field.key]: parseMacroValue(value) })}
+                  onFocus={() => setNumericInputFocused(true)}
+                  onBlur={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
                   />
                 ))}
               </div>
-              <DoneButton />
               <label>
                 タグ
                 <input
@@ -324,11 +343,26 @@ export function App() {
         <NavButton active={tab === 'new-food'} icon={<Plus size={20} />} label="登録" onClick={() => setTab('new-food')} />
         <NavButton active={tab === 'foods'} icon={<BookOpen size={20} />} label="食品" onClick={() => setTab('foods')} />
       </nav>
+      {numericInputFocused && <KeyboardDoneControl />}
     </div>
   );
 }
 
-function MacroInput({ label, unit, value, onChange }: { label: string; unit?: string; value: number; onChange: (value: string) => void }) {
+function MacroInput({
+  label,
+  unit,
+  value,
+  onChange,
+  onFocus,
+  onBlur,
+}: {
+  label: string;
+  unit?: string;
+  value: number;
+  onChange: (value: string) => void;
+  onFocus: () => void;
+  onBlur: () => void;
+}) {
   return (
     <label className="macro-card">
       <span>{label}</span>
@@ -340,8 +374,10 @@ function MacroInput({ label, unit, value, onChange }: { label: string; unit?: st
         step="0.1"
         value={formatInputValue(value)}
         onFocus={(event) => {
+          onFocus();
           if (Number(event.currentTarget.value) === 0) onChange('');
         }}
+        onBlur={onBlur}
         onChange={(event) => onChange(sanitizeNumericInput(event.target.value))}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur();
@@ -352,16 +388,18 @@ function MacroInput({ label, unit, value, onChange }: { label: string; unit?: st
   );
 }
 
-function DoneButton() {
+function KeyboardDoneControl() {
   return (
     <button
-      className="done-button"
+      className="keyboard-done-control"
       type="button"
-      onClick={() => {
+      aria-label="テンキーを閉じる"
+      onPointerDown={(event) => {
+        event.preventDefault();
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       }}
     >
-      完了
+      ✓ 完了
     </button>
   );
 }
