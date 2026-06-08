@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PFC Meal Planner icon">
+  <rect width="512" height="512" rx="112" fill="#2f7d68"/>
+  <circle cx="256" cy="256" r="152" fill="#f8fbf8"/>
+  <path fill="#f07a4f" d="M160 260c0-53 43-96 96-96s96 43 96 96v24H160v-24Z"/>
+  <path fill="#2f7d68" d="M177 304h158c-12 42-43 72-79 72s-67-30-79-72Z"/>
+  <circle cx="206" cy="246" r="18" fill="#f8fbf8"/>
+  <circle cx="256" cy="224" r="18" fill="#f8fbf8"/>
+  <circle cx="306" cy="246" r="18" fill="#f8fbf8"/>
+  <path fill="#17342c" d="M178 288h156v24H178z"/>
+</svg>
