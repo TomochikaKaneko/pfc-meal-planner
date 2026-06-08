@@ -1,6 +1,9 @@
 import type { Food } from '../types';
 
-export const initialFoods: Food[] = [
+type FoodSeed = Omit<Food, 'baseServing' | 'servingUnit' | 'minServing' | 'maxServing' | 'step'>;
+type ServingRule = Pick<Food, 'baseServing' | 'servingUnit' | 'minServing' | 'maxServing' | 'step'>;
+
+const foodSeeds: FoodSeed[] = [
   {
     id: 'white-rice',
     name: '白米',
@@ -17,12 +20,12 @@ export const initialFoods: Food[] = [
   {
     id: 'barley',
     name: 'スーパー大麦',
-    category: 'staple',
-    standardAmount: '120g',
-    kcal: 178,
-    protein: 4.1,
-    fat: 1.1,
-    carb: 39.8,
+    category: 'side',
+    standardAmount: '10g',
+    kcal: 15,
+    protein: 0.3,
+    fat: 0.1,
+    carb: 3.4,
     tags: ['barley', 'rice', 'fiber', 'low-fat'],
     pairsWith: ['鶏むね肉', '絹豆腐', 'めかぶ', 'わかめ味噌汁'],
     source: 'initial',
@@ -457,3 +460,43 @@ export const initialFoods: Food[] = [
     source: 'initial',
   },
 ];
+
+const servingRules: Record<string, ServingRule> = {
+  'white-rice': { baseServing: 150, servingUnit: 'g', minServing: 100, maxServing: 250, step: 10 },
+  barley: { baseServing: 10, servingUnit: 'g', minServing: 5, maxServing: 10, step: 5 },
+  spaghetti: { baseServing: 80, servingUnit: 'g', minServing: 60, maxServing: 100, step: 10 },
+  bread: { baseServing: 1, servingUnit: '枚', minServing: 1, maxServing: 2, step: 1 },
+  udon: { baseServing: 1, servingUnit: '玉', minServing: 1, maxServing: 1, step: 1 },
+  soba: { baseServing: 1, servingUnit: '玉', minServing: 1, maxServing: 1, step: 1 },
+  'chicken-breast': { baseServing: 120, servingUnit: 'g', minServing: 100, maxServing: 250, step: 10 },
+  sasami: { baseServing: 120, servingUnit: 'g', minServing: 80, maxServing: 200, step: 10 },
+  egg: { baseServing: 1, servingUnit: '個', minServing: 1, maxServing: 2, step: 1 },
+  'boiled-egg': { baseServing: 1, servingUnit: '個', minServing: 1, maxServing: 2, step: 1 },
+  natto: { baseServing: 1, servingUnit: 'パック', minServing: 1, maxServing: 2, step: 1 },
+  'silken-tofu': { baseServing: 150, servingUnit: 'g', minServing: 100, maxServing: 300, step: 50 },
+  'firm-tofu': { baseServing: 150, servingUnit: 'g', minServing: 100, maxServing: 300, step: 50 },
+  salmon: { baseServing: 100, servingUnit: 'g', minServing: 80, maxServing: 180, step: 10 },
+  'tuna-sashimi': { baseServing: 100, servingUnit: 'g', minServing: 80, maxServing: 160, step: 10 },
+  'canned-tuna': { baseServing: 1, servingUnit: '缶', minServing: 1, maxServing: 2, step: 1 },
+  'mackerel-can': { baseServing: 0.5, servingUnit: '缶', minServing: 0.5, maxServing: 1, step: 0.5 },
+  'protein-powder': { baseServing: 1, servingUnit: '杯', minServing: 1, maxServing: 1, step: 1 },
+  mekabu: { baseServing: 1, servingUnit: 'パック', minServing: 1, maxServing: 2, step: 1 },
+  broccoli: { baseServing: 80, servingUnit: 'g', minServing: 50, maxServing: 150, step: 10 },
+  'mini-tomato': { baseServing: 6, servingUnit: '個', minServing: 3, maxServing: 8, step: 1 },
+  cabbage: { baseServing: 100, servingUnit: 'g', minServing: 50, maxServing: 180, step: 10 },
+  kimchi: { baseServing: 50, servingUnit: 'g', minServing: 30, maxServing: 80, step: 10 },
+  wakame: { baseServing: 40, servingUnit: 'g', minServing: 20, maxServing: 60, step: 10 },
+};
+
+const defaultServingRules: Record<Food['category'], ServingRule> = {
+  staple: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
+  protein: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
+  side: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
+  soup: { baseServing: 1, servingUnit: '杯', minServing: 1, maxServing: 1, step: 1 },
+  seasoning: { baseServing: 1, servingUnit: '回', minServing: 0, maxServing: 1, step: 1 },
+};
+
+export const initialFoods: Food[] = foodSeeds.map((food) => ({
+  ...food,
+  ...(servingRules[food.id] ?? defaultServingRules[food.category]),
+}));

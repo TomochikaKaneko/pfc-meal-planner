@@ -1,8 +1,9 @@
 import { FormEvent, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { BookOpen, ChefHat, Home, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
-import type { ConditionTag, Food, FoodCategory, MealCandidate, MealInput } from './types';
+import type { ConditionTag, Food, FoodCategory, MacroKey, MealCandidate, MealInput } from './types';
 
 const USER_FOODS_KEY = 'pfc-meal-planner:user-foods';
 const LAST_INPUT_KEY = 'pfc-meal-planner:last-input';
@@ -22,7 +23,7 @@ const conditionOptions: { value: ConditionTag; label: string }[] = [
 const categoryOptions: { value: FoodCategory; label: string }[] = [
   { value: 'staple', label: '主食' },
   { value: 'protein', label: 'タンパク質' },
-  { value: 'side', label: '副菜' },
+  { value: 'side', label: '副菜・補助主食' },
   { value: 'soup', label: '汁物' },
   { value: 'seasoning', label: '調味料' },
 ];
@@ -55,21 +56,31 @@ export function App() {
   const [results, setResults] = useState<MealCandidate[]>([]);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
 
-  const foods = useMemo(() => [...initialFoods, ...userFoods], [userFoods]);
+  const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
 
-  function updateInput(key: keyof MealInput, value: number | ConditionTag[]) {
-    const next = { ...mealInput, [key]: value };
+  function updateInput(key: MacroKey, rawValue: string) {
+    const next = { ...mealInput, [key]: parseMacroValue(rawValue) };
+    setMealInput(next);
+    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(next));
+  }
+
+  function updateTags(tags: ConditionTag[]) {
+    const next = { ...mealInput, tags };
     setMealInput(next);
     localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(next));
   }
 
   function toggleTag(tag: ConditionTag) {
     const exists = mealInput.tags.includes(tag);
-    updateInput('tags', exists ? mealInput.tags.filter((item) => item !== tag) : [...mealInput.tags, tag]);
+    updateTags(exists ? mealInput.tags.filter((item) => item !== tag) : [...mealInput.tags, tag]);
   }
 
   function suggestMeals() {
-    const candidates = createMealCandidates(mealInput, foods);
+    const safeInput = macroFields.reduce(
+      (acc, field) => ({ ...acc, [field.key]: Number.isFinite(mealInput[field.key]) ? mealInput[field.key] : 0 }),
+      { ...mealInput },
+    );
+    const candidates = createMealCandidates(safeInput, foods);
     setResults(candidates);
     setTab('results');
   }
@@ -87,6 +98,11 @@ export function App() {
       protein: Number(foodForm.protein),
       fat: Number(foodForm.fat),
       carb: Number(foodForm.carb),
+      baseServing: 1,
+      servingUnit: '食',
+      minServing: 1,
+      maxServing: 1,
+      step: 1,
       tags: foodForm.tags
         .split(',')
         .map((tag) => tag.trim())
@@ -126,26 +142,23 @@ export function App() {
             <div className="panel hero-panel">
               <div>
                 <p className="eyebrow">今日の残り枠</p>
-                <h2>残りPFCに合う献立を3つ提案</h2>
+                <h2>残りPFCに合う料理献立を3つ提案</h2>
               </div>
               <Sparkles size={26} />
             </div>
 
             <div className="macro-grid">
               {macroFields.map((field) => (
-                <label className="macro-card" key={field.key}>
-                  <span>{field.label}</span>
-                  <input
-                    inputMode="decimal"
-                    type="number"
-                    min="0"
-                    value={mealInput[field.key]}
-                    onChange={(event) => updateInput(field.key, Number(event.target.value))}
-                  />
-                  <small>{field.unit}</small>
-                </label>
+                <MacroInput
+                  key={field.key}
+                  label={field.label}
+                  unit={field.unit}
+                  value={mealInput[field.key]}
+                  onChange={(value) => updateInput(field.key, value)}
+                />
               ))}
             </div>
+            <DoneButton />
 
             <section className="panel">
               <div className="section-title">
@@ -228,19 +241,15 @@ export function App() {
               </label>
               <div className="macro-grid compact">
                 {macroFields.map((field) => (
-                  <label className="macro-card" key={field.key}>
-                    <span>{field.label}</span>
-                    <input
-                      inputMode="decimal"
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={foodForm[field.key]}
-                      onChange={(event) => setFoodForm({ ...foodForm, [field.key]: Number(event.target.value) })}
-                    />
-                  </label>
+                  <MacroInput
+                    key={field.key}
+                    label={field.label}
+                    value={foodForm[field.key]}
+                    onChange={(value) => setFoodForm({ ...foodForm, [field.key]: parseMacroValue(value) })}
+                  />
                 ))}
               </div>
+              <DoneButton />
               <label>
                 タグ
                 <input
@@ -274,7 +283,11 @@ export function App() {
                     <p>
                       {food.standardAmount} / {food.kcal}kcal P{food.protein} F{food.fat} C{food.carb}
                     </p>
-                    <small>{food.tags.join(', ') || 'タグなし'}</small>
+                    <small>
+                      {food.minServing}
+                      {food.servingUnit}〜{food.maxServing}
+                      {food.servingUnit} / {food.tags.join(', ') || 'タグなし'}
+                    </small>
                   </div>
                   {food.source === 'user' && (
                     <button className="icon-button danger" type="button" aria-label={`${food.name}を削除`} onClick={() => deleteFood(food.id)}>
@@ -298,13 +311,54 @@ export function App() {
   );
 }
 
+function MacroInput({ label, unit, value, onChange }: { label: string; unit?: string; value: number; onChange: (value: string) => void }) {
+  return (
+    <label className="macro-card">
+      <span>{label}</span>
+      <input
+        inputMode="decimal"
+        enterKeyHint="done"
+        type="number"
+        min="0"
+        step="0.1"
+        value={formatInputValue(value)}
+        onFocus={(event) => {
+          if (Number(event.currentTarget.value) === 0) onChange('');
+        }}
+        onChange={(event) => onChange(sanitizeNumericInput(event.target.value))}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+      />
+      {unit && <small>{unit}</small>}
+    </label>
+  );
+}
+
+function DoneButton() {
+  return (
+    <button
+      className="done-button"
+      type="button"
+      onClick={() => {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      }}
+    >
+      完了
+    </button>
+  );
+}
+
 function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
   return (
     <article className="meal-card">
       <div className="meal-heading">
         <div>
-          <p className="eyebrow">候補 {rank} / {meal.templateName}</p>
+          <p className="eyebrow">
+            候補 {rank} / {meal.templateName}
+          </p>
           <h3>{meal.title}</h3>
+          <p className="dish-name">料理名: {meal.dishName}</p>
         </div>
         <span className="score">{Math.round(meal.score)}</span>
       </div>
@@ -346,7 +400,7 @@ function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
   );
 }
 
-function NavButton({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
+function NavButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
   return (
     <button className={active ? 'nav-button active' : 'nav-button'} type="button" onClick={onClick}>
       {icon}
@@ -364,6 +418,35 @@ const macroFields = [
 
 function categoryLabel(category: FoodCategory) {
   return categoryOptions.find((option) => option.value === category)?.label ?? category;
+}
+
+function sanitizeNumericInput(value: string) {
+  const numeric = value.replace(/[^\d.]/g, '');
+  const [integerPart, ...decimalParts] = numeric.split('.');
+  const integer = integerPart.replace(/^0+(?=\d)/, '');
+  return decimalParts.length > 0 ? `${integer || '0'}.${decimalParts.join('')}` : integer;
+}
+
+function parseMacroValue(value: string) {
+  if (!value) return 0;
+  const parsed = Number(sanitizeNumericInput(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatInputValue(value: number) {
+  if (!value) return '';
+  return String(value).replace(/^0+(?=\d)/, '');
+}
+
+function normalizeUserFoods(foods: Food[]): Food[] {
+  return foods.map((food) => ({
+    ...food,
+    baseServing: food.baseServing ?? 1,
+    servingUnit: food.servingUnit ?? '食',
+    minServing: food.minServing ?? 1,
+    maxServing: food.maxServing ?? 1,
+    step: food.step ?? 1,
+  }));
 }
 
 function loadJson<T>(key: string, fallback: T): T {

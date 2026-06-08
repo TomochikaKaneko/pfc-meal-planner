@@ -30,6 +30,11 @@ export interface Food extends MacroProfile {
   name: string;
   category: FoodCategory;
   standardAmount: string;
+  baseServing: number;
+  servingUnit: string;
+  minServing: number;
+  maxServing: number;
+  step: number;
   tags: string[];
   pairsWith: string[];
   source: 'initial' | 'user';
@@ -42,13 +47,17 @@ export interface MealInput extends MacroProfile {
 export interface MealItem {
   food: Food;
   role: string;
+  dishName: string;
+  serving: number;
   amount: string;
+  macros: MacroProfile;
 }
 
 export interface MealCandidate {
   id: string;
   templateName: string;
   title: string;
+  dishName: string;
   items: MealItem[];
   totals: MacroProfile;
   diff: MacroProfile;
