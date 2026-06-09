@@ -5,6 +5,8 @@ type MealTemplate = {
   id: string;
   name: string;
   title: string;
+  displayLabel: string;
+  mealTiming: Array<Recipe['mealTiming'][number]>;
   roles: Array<{
     role: string;
     categories: Recipe['category'][];
@@ -20,9 +22,11 @@ const mealTemplates: MealTemplate[] = [
     id: 'breakfast',
     name: '朝食',
     title: '朝の高タンパク和食',
+    displayLabel: '軽め案',
+    mealTiming: ['breakfast'],
     roles: [
       { role: '主食', categories: ['staple'], preferTags: ['breakfast', 'japanese', 'natto', 'oatmeal'] },
-      { role: '主菜', categories: ['main', 'drink'], preferTags: ['egg', 'tofu', 'high-protein', 'convenience'] },
+      { role: '主菜', categories: ['main'], preferTags: ['egg', 'tofu', 'high-protein', 'convenience'] },
       { role: '副菜', categories: ['side'], preferTags: ['mekabu', 'breakfast', 'low-fat'] },
       { role: '汁物', categories: ['soup'], preferTags: ['soup', 'japanese', 'tofu'] },
     ],
@@ -33,6 +37,8 @@ const mealTemplates: MealTemplate[] = [
     id: 'japanese-set',
     name: '和食定食',
     title: '主食＋主菜の和食定食',
+    displayLabel: '和食案',
+    mealTiming: ['lunch', 'dinner'],
     roles: [
       { role: '主食', categories: ['staple'], preferTags: ['white-rice', 'barley', 'japanese'] },
       { role: '主菜', categories: ['main'], preferTags: ['japanese', 'chicken', 'fish', 'tofu', 'set-meal'] },
@@ -46,6 +52,8 @@ const mealTemplates: MealTemplate[] = [
     id: 'cutting',
     name: '減量飯',
     title: '低脂質高タンパクの減量献立',
+    displayLabel: '低脂質案',
+    mealTiming: ['lunch', 'dinner'],
     roles: [
       { role: '主食', categories: ['staple'], preferTags: ['barley', 'white-rice', 'oatmeal'], avoidTags: ['bread'] },
       { role: '主菜', categories: ['main'], preferTags: ['low-fat', 'high-protein', 'chicken', 'fish', 'tofu'] },
@@ -59,6 +67,8 @@ const mealTemplates: MealTemplate[] = [
     id: 'fish-set',
     name: '魚定食',
     title: '魚メインの和定食',
+    displayLabel: '魚メイン案',
+    mealTiming: ['lunch', 'dinner'],
     roles: [
       { role: '主食', categories: ['staple'], preferTags: ['white-rice', 'barley', 'japanese'] },
       { role: '主菜', categories: ['main'], preferTags: ['fish', 'japanese', 'set-meal'] },
@@ -72,11 +82,13 @@ const mealTemplates: MealTemplate[] = [
     id: 'convenience',
     name: 'コンビニ風',
     title: '買いやすいコンビニ風献立',
+    displayLabel: 'コンビニ風案',
+    mealTiming: ['lunch', 'dinner', 'snack'],
     roles: [
       { role: '主食', categories: ['staple'], preferTags: ['convenience', 'white-rice', 'oatmeal'] },
-      { role: '主菜', categories: ['main', 'drink'], preferTags: ['convenience', 'high-protein', 'low-fat'] },
+      { role: '主菜', categories: ['main'], preferTags: ['convenience', 'high-protein', 'low-fat'] },
       { role: '副菜', categories: ['side'], preferTags: ['convenience', 'vegetable', 'low-fat'] },
-      { role: '汁物', categories: ['soup', 'drink'], preferTags: ['soup', 'protein', 'high-protein'] },
+      { role: '汁物', categories: ['soup'], preferTags: ['soup', 'protein', 'high-protein'] },
     ],
     reason: 'コンビニでも揃えやすい料理名の組み合わせにしました。',
     caution: '市販品を使う場合は、実際の商品ラベルのPFCを優先してください。',
@@ -102,11 +114,10 @@ export function createMealCandidates(input: MealInput, foods: Food[], recipes: R
   const recipePool = recipes.filter((recipe) => recipe.ingredients.every((ingredient) => foodMap.has(ingredient.foodId)));
   const candidates = mealTemplates.flatMap((template) => buildTemplateCandidates(template, input, foodMap, recipePool));
 
-  return candidates
-    .filter((candidate) => isNaturalMeal(candidate.items))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((candidate, index) => ({ ...candidate, id: `${candidate.id}-${index}` }));
+  return diversifyCandidates(candidates.filter((candidate) => isNaturalMeal(candidate.items)), input).map((candidate, index) => ({
+    ...candidate,
+    id: `${candidate.id}-${index}`,
+  }));
 }
 
 function buildTemplateCandidates(template: MealTemplate, input: MealInput, foodMap: Map<string, Food>, recipes: Recipe[]) {
@@ -114,7 +125,8 @@ function buildTemplateCandidates(template: MealTemplate, input: MealInput, foodM
     role,
     recipes: recipes
       .filter((recipe) => role.categories.includes(recipe.category))
-      .map((recipe) => ({ recipe, score: scoreRecipe(recipe, role.preferTags, role.avoidTags ?? [], input) }))
+      .filter((recipe) => matchesMealTiming(recipe, template))
+      .map((recipe) => ({ recipe, score: scoreRecipe(recipe, role.preferTags, role.avoidTags ?? [], input, template) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
       .map(({ recipe }) => recipe),
@@ -128,7 +140,8 @@ function buildTemplateCandidates(template: MealTemplate, input: MealInput, foodM
           const selected = [staple, main, side, soup];
           if (new Set(selected.map((recipe) => recipe.id)).size !== selected.length) continue;
           const items = selected.map((recipe, index) => buildMealItem(recipe, template.roles[index].role, foodMap));
-          const tunedItems = tuneWhiteRiceServing(items, input);
+          const withExtra = addOptionalExtra(items, template, input, foodMap, recipes);
+          const tunedItems = tuneWhiteRiceServing(withExtra, input);
           const totals = sumMacros(tunedItems.map((item) => item.macros));
           const diff = diffMacros(totals, input);
           const score = scoreMeal(template, tunedItems, totals, diff, input);
@@ -136,11 +149,13 @@ function buildTemplateCandidates(template: MealTemplate, input: MealInput, foodM
           candidates.push({
             id: `${template.id}-${selected.map((recipe) => recipe.id).join('-')}`,
             templateName: template.name,
+            label: classifyCandidate(template, tunedItems, input),
             title: buildMealTitle(template, tunedItems),
             items: tunedItems,
             totals,
             diff,
             score,
+            fitScore: calculateFitScore(diff),
             reason: template.reason,
             caution: template.caution,
           });
@@ -171,6 +186,36 @@ function buildMealItem(recipe: Recipe, role: string, foodMap: Map<string, Food>)
     ingredients,
     macros: sumMacros(ingredients.map((ingredient) => ingredient.macros)),
   };
+}
+
+function addOptionalExtra(
+  items: MealItem[],
+  template: MealTemplate,
+  input: MealInput,
+  foodMap: Map<string, Food>,
+  recipes: Recipe[],
+): MealItem[] {
+  const totals = sumMacros(items.map((item) => item.macros));
+  const kcalGap = input.kcal - totals.kcal;
+  const proteinGap = input.protein - totals.protein;
+  const shouldAdd = kcalGap >= 90 || proteinGap >= 15;
+  if (!shouldAdd) return items;
+
+  const optionalCategories: Recipe['category'][] = ['dairy', 'fruit', 'drink', 'snack', 'supplement'];
+  const usedIds = new Set(items.map((item) => item.recipe.id));
+  const extra = recipes
+    .filter((recipe) => optionalCategories.includes(recipe.category))
+    .filter((recipe) => matchesMealTiming(recipe, template) || recipe.mealTiming.includes('snack'))
+    .filter((recipe) => !usedIds.has(recipe.id))
+    .map((recipe) => buildMealItem(recipe, '追加', foodMap))
+    .filter((item) => item.macros.kcal <= Math.max(180, kcalGap + 60))
+    .sort((a, b) => {
+      const aProteinFit = Math.abs(proteinGap - a.macros.protein);
+      const bProteinFit = Math.abs(proteinGap - b.macros.protein);
+      return aProteinFit - bProteinFit || a.macros.kcal - b.macros.kcal;
+    })[0];
+
+  return extra ? [...items, extra] : items;
 }
 
 function tuneWhiteRiceServing(items: MealItem[], input: MealInput): MealItem[] {
@@ -206,6 +251,10 @@ function tuneWhiteRiceServing(items: MealItem[], input: MealInput): MealItem[] {
   });
 }
 
+function matchesMealTiming(recipe: Recipe, template: MealTemplate) {
+  return recipe.mealTiming.some((timing) => template.mealTiming.includes(timing));
+}
+
 function findRiceIngredient(items: MealItem[]) {
   for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
     const ingredientIndex = items[itemIndex].ingredients.findIndex((ingredient) => ingredient.food.id === 'white-rice');
@@ -214,15 +263,18 @@ function findRiceIngredient(items: MealItem[]) {
   return null;
 }
 
-function scoreRecipe(recipe: Recipe, preferTags: string[], avoidTags: string[], input: MealInput) {
+function scoreRecipe(recipe: Recipe, preferTags: string[], avoidTags: string[], input: MealInput, template: MealTemplate) {
   const selectedTags = expandTags(input.tags);
-  const tagScore = selectedTags.filter((tag) => recipe.tags.includes(tag)).length * 42;
+  const directSelected = input.tags.flatMap((tag) => tagAliases[tag] ?? [tag]);
+  const tagScore = selectedTags.filter((tag) => recipe.tags.includes(tag)).length * 72;
+  const directTagScore = directSelected.filter((tag) => recipe.tags.includes(tag)).length * 90;
   const preferScore = preferTags.filter((tag) => recipe.tags.includes(tag)).length * 26;
   const avoidPenalty = avoidTags.filter((tag) => recipe.tags.includes(tag)).length * 50;
-  const lowFatBonus = input.tags.includes('low-fat') && recipe.tags.includes('low-fat') ? 32 : 0;
-  const proteinBonus = input.tags.includes('high-protein') && recipe.tags.includes('high-protein') ? 32 : 0;
+  const lowFatBonus = input.tags.includes('low-fat') && recipe.tags.includes('low-fat') ? 80 : 0;
+  const proteinBonus = input.tags.includes('high-protein') && recipe.tags.includes('high-protein') ? 80 : 0;
+  const timingBonus = matchesMealTiming(recipe, template) ? 18 : 0;
   const timeBonus = Math.max(0, 18 - recipe.cookingTime);
-  return tagScore + preferScore + lowFatBonus + proteinBonus + timeBonus - avoidPenalty;
+  return tagScore + directTagScore + preferScore + lowFatBonus + proteinBonus + timingBonus + timeBonus - avoidPenalty;
 }
 
 function scoreMeal(template: MealTemplate, items: MealItem[], totals: MacroProfile, diff: MacroProfile, input: MealInput) {
@@ -231,9 +283,9 @@ function scoreMeal(template: MealTemplate, items: MealItem[], totals: MacroProfi
   const fScore = Math.max(0, 95 - Math.abs(diff.fat) * 5.2);
   const cScore = Math.max(0, 95 - Math.abs(diff.carb) * 2);
   const selectedTags = expandTags(input.tags);
-  const tagScore = items.flatMap((item) => item.recipe.tags).filter((tag) => selectedTags.includes(tag)).length * 16;
-  const lowFatScore = input.tags.includes('low-fat') ? Math.max(0, 100 - totals.fat * 5) : 0;
-  const highProteinScore = input.tags.includes('high-protein') ? totals.protein * 1.7 : 0;
+  const tagScore = items.flatMap((item) => item.recipe.tags).filter((tag) => selectedTags.includes(tag)).length * 42;
+  const lowFatScore = input.tags.includes('low-fat') ? Math.max(0, 180 - totals.fat * 7) : 0;
+  const highProteinScore = input.tags.includes('high-protein') ? totals.protein * 3.2 : 0;
   const structureScore = hasRole(items, '主食') && hasRole(items, '主菜') && hasRole(items, '副菜') ? 80 : -120;
   const templateScore = items.some((item) => item.recipe.tags.includes(template.id)) ? 12 : 0;
 
@@ -248,6 +300,112 @@ function isNaturalMeal(items: MealItem[]) {
   const hasBarley = allIngredients.some((ingredient) => ingredient.food.id === 'barley');
   if (hasBarley && !hasWhiteRice) return false;
   return true;
+}
+
+function diversifyCandidates(candidates: MealCandidate[], input: MealInput) {
+  const pool = candidates.sort((a, b) => b.score - a.score);
+  const selected: MealCandidate[] = [];
+  const strategies: Array<{
+    label: string;
+    rank: (candidate: MealCandidate) => number;
+  }> = [
+    {
+      label: '高タンパク案',
+      rank: (candidate) => candidate.score - similarityPenalty(candidate, selected) - macroDistance(candidate.diff) * 0.3,
+    },
+    {
+      label: '低脂質案',
+      rank: (candidate) =>
+        candidate.score +
+        (candidate.totals.fat <= input.fat ? 90 : 0) -
+        candidate.totals.fat * 7 -
+        similarityPenalty(candidate, selected),
+    },
+    {
+      label: '満足感重視案',
+      rank: (candidate) =>
+        candidate.score +
+        candidate.totals.kcal * 0.18 +
+        candidate.totals.carb * 1.2 +
+        candidate.items.length * 18 -
+        similarityPenalty(candidate, selected),
+    },
+  ];
+
+  for (const strategy of strategies) {
+    const picked = pool
+      .filter((candidate) => !selected.some((item) => item.id === candidate.id))
+      .sort((a, b) => strategy.rank(b) - strategy.rank(a))[0];
+    if (picked) selected.push({ ...picked, label: refineLabel(strategy.label, picked, input) });
+  }
+
+  return selected;
+}
+
+function similarityPenalty(candidate: MealCandidate, selected: MealCandidate[]) {
+  return selected.reduce((penalty, item) => {
+    const sameMain = getRoleRecipeName(candidate, '主菜') === getRoleRecipeName(item, '主菜') ? 260 : 0;
+    const sameStaple = getRoleRecipeName(candidate, '主食') === getRoleRecipeName(item, '主食') ? 170 : 0;
+    const tagOverlap = overlap(candidate.items.flatMap((mealItem) => mealItem.recipe.tags), item.items.flatMap((mealItem) => mealItem.recipe.tags));
+    const closeName = hasSimilarRecipeName(candidate, item) ? 180 : 0;
+    return penalty + sameMain + sameStaple + tagOverlap * 22 + closeName;
+  }, 0);
+}
+
+function hasSimilarRecipeName(a: MealCandidate, b: MealCandidate) {
+  const aNames = a.items.map((item) => normalizeRecipeName(item.recipe.name));
+  const bNames = b.items.map((item) => normalizeRecipeName(item.recipe.name));
+  return aNames.some((aName) => bNames.some((bName) => aName && bName && (aName.includes(bName) || bName.includes(aName))));
+}
+
+function normalizeRecipeName(name: string) {
+  return name.replace(/ご飯|定食|風|セット|和え|の|と|入り/g, '').slice(0, 5);
+}
+
+function overlap(a: string[], b: string[]) {
+  const bSet = new Set(b);
+  return [...new Set(a)].filter((tag) => bSet.has(tag)).length;
+}
+
+function macroDistance(diff: MacroProfile) {
+  return Math.abs(diff.kcal) + Math.abs(diff.protein) * 18 + Math.abs(diff.fat) * 22 + Math.abs(diff.carb) * 8;
+}
+
+function getRoleRecipeName(candidate: MealCandidate, role: string) {
+  return candidate.items.find((item) => item.role === role)?.recipe.name ?? '';
+}
+
+function calculateFitScore(diff: MacroProfile) {
+  const distance = Math.abs(diff.kcal) * 0.08 + Math.abs(diff.protein) * 2.5 + Math.abs(diff.fat) * 3 + Math.abs(diff.carb) * 1.4;
+  return Math.max(1, Math.min(99, Math.round(100 - distance)));
+}
+
+function classifyCandidate(template: MealTemplate, items: MealItem[], input: MealInput) {
+  const tags = items.flatMap((item) => item.recipe.tags);
+  if (input.tags.includes('fish') || tags.includes('fish')) return '魚メイン案';
+  if (input.tags.includes('chicken') || tags.includes('chicken')) return '鶏肉メイン案';
+  if (input.tags.includes('low-fat')) return '低脂質案';
+  if (input.tags.includes('high-protein')) return '高タンパク案';
+  if (tags.includes('convenience')) return 'コンビニ風案';
+  if (tags.includes('japanese')) return '和食案';
+  return template.displayLabel;
+}
+
+function refineLabel(baseLabel: string, candidate: MealCandidate, input: MealInput) {
+  if (baseLabel === '高タンパク案') return classifyCandidateLabel(candidate, input, '高タンパク案');
+  if (baseLabel === '低脂質案') return '低脂質案';
+  if (baseLabel === '満足感重視案') return '満足感重視案';
+  return baseLabel;
+}
+
+function classifyCandidateLabel(candidate: MealCandidate, input: MealInput, fallback: string) {
+  const tags = candidate.items.flatMap((item) => item.recipe.tags);
+  if (input.tags.includes('fish') || tags.includes('fish')) return '魚メイン案';
+  if (input.tags.includes('chicken') || tags.includes('chicken')) return '鶏肉メイン案';
+  if (input.tags.includes('tofu') || tags.includes('tofu')) return '豆腐入り案';
+  if (input.tags.includes('natto') || tags.includes('natto')) return '納豆入り案';
+  if (input.tags.includes('mekabu') || tags.includes('mekabu')) return 'めかぶ入り案';
+  return fallback;
 }
 
 function buildMealTitle(template: MealTemplate, items: MealItem[]) {

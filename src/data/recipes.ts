@@ -1,6 +1,10 @@
-import type { Recipe } from '../types';
+import type { MealTiming, Recipe } from '../types';
 
-export const initialRecipes: Recipe[] = [
+type RecipeSeed = Omit<Recipe, 'mealTiming'> & {
+  mealTiming?: MealTiming[];
+};
+
+const recipeSeeds: RecipeSeed[] = [
   {
     id: 'white-rice-bowl',
     name: '白米ご飯',
@@ -846,3 +850,16 @@ export const initialRecipes: Recipe[] = [
     recipeUrl: '',
   },
 ];
+
+export const initialRecipes: Recipe[] = recipeSeeds.map((recipe) => ({
+  ...recipe,
+  mealTiming: recipe.mealTiming ?? inferMealTiming(recipe),
+}));
+
+function inferMealTiming(recipe: RecipeSeed): MealTiming[] {
+  if (recipe.tags.includes('breakfast')) return ['breakfast'];
+  if (recipe.category === 'drink' || recipe.category === 'snack' || recipe.category === 'supplement') return ['snack'];
+  if (recipe.category === 'staple') return ['breakfast', 'lunch', 'dinner'];
+  if (recipe.category === 'soup' || recipe.category === 'side') return ['breakfast', 'lunch', 'dinner'];
+  return ['lunch', 'dinner'];
+}

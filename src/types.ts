@@ -2,9 +2,14 @@ export type MacroKey = 'kcal' | 'protein' | 'fat' | 'carb';
 
 export type FoodCategory =
   | 'staple'
-  | 'protein'
+  | 'main'
   | 'side'
   | 'soup'
+  | 'dairy'
+  | 'fruit'
+  | 'drink'
+  | 'snack'
+  | 'supplement'
   | 'seasoning';
 
 export type RecipeCategory =
@@ -12,7 +17,14 @@ export type RecipeCategory =
   | 'main'
   | 'side'
   | 'soup'
-  | 'drink';
+  | 'dairy'
+  | 'fruit'
+  | 'drink'
+  | 'snack'
+  | 'supplement'
+  | 'seasoning';
+
+export type MealTiming = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export type ConditionTag =
   | 'white-rice'
@@ -62,6 +74,7 @@ export interface Recipe {
   category: RecipeCategory;
   ingredients: RecipeIngredient[];
   tags: string[];
+  mealTiming: MealTiming[];
   description: string;
   cookingTime: number;
   difficulty: 'easy' | 'normal';
@@ -85,11 +98,13 @@ export interface MealItem {
 export interface MealCandidate {
   id: string;
   templateName: string;
+  label: string;
   title: string;
   items: MealItem[];
   totals: MacroProfile;
   diff: MacroProfile;
   score: number;
+  fitScore: number;
   reason: string;
   caution: string;
 }

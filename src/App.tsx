@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BookOpen, ChefHat, Home, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, ChefHat, CircleHelp, Home, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
 import type { ConditionTag, Food, FoodCategory, MacroKey, MealCandidate, MealInput } from './types';
@@ -22,9 +22,14 @@ const conditionOptions: { value: ConditionTag; label: string }[] = [
 
 const categoryOptions: { value: FoodCategory; label: string }[] = [
   { value: 'staple', label: '主食' },
-  { value: 'protein', label: 'タンパク質' },
-  { value: 'side', label: '副菜・補助主食' },
+  { value: 'main', label: '主菜' },
+  { value: 'side', label: '副菜' },
   { value: 'soup', label: '汁物' },
+  { value: 'dairy', label: '乳製品' },
+  { value: 'fruit', label: '果物' },
+  { value: 'drink', label: '飲料' },
+  { value: 'snack', label: '間食' },
+  { value: 'supplement', label: 'サプリ' },
   { value: 'seasoning', label: '調味料' },
 ];
 
@@ -38,7 +43,7 @@ const defaultInput: MealInput = {
 
 const emptyFoodForm = {
   name: '',
-  category: 'protein' as FoodCategory,
+  category: 'main' as FoodCategory,
   standardAmount: '',
   kcal: 0,
   protein: 0,
@@ -47,7 +52,7 @@ const emptyFoodForm = {
   tags: '',
 };
 
-type Tab = 'home' | 'results' | 'new-food' | 'foods';
+type Tab = 'home' | 'results' | 'new-food' | 'foods' | 'guide';
 
 export function App() {
   const [tab, setTab] = useState<Tab>('home');
@@ -167,8 +172,8 @@ export function App() {
           <section className="stack">
             <div className="panel hero-panel">
               <div>
-                <p className="eyebrow">今日の残り枠</p>
-                <h2>残りPFCに合う料理献立を3つ提案</h2>
+                <p className="eyebrow">meal target</p>
+                <h2>この食事で摂りたいPFCに合う献立を提案</h2>
               </div>
               <Sparkles size={26} />
             </div>
@@ -181,19 +186,25 @@ export function App() {
               </section>
             )}
 
-            <div className="macro-grid">
-              {macroFields.map((field) => (
-                <MacroInput
-                  key={field.key}
-                  label={field.label}
-                  unit={field.unit}
-                  value={mealInput[field.key]}
-                  onChange={(value) => updateInput(field.key, value)}
-                  onFocus={() => setNumericInputFocused(true)}
-                  onBlur={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
-                />
-              ))}
-            </div>
+            <section className="panel">
+              <div className="section-title vertical">
+                <h2>この食事で摂りたい目安</h2>
+                <p>今日の残りや、この1食で摂りたい kcal / P / F / C を入力してください。</p>
+              </div>
+              <div className="macro-grid with-heading">
+                {macroFields.map((field) => (
+                  <MacroInput
+                    key={field.key}
+                    label={field.label}
+                    unit={field.unit}
+                    value={mealInput[field.key]}
+                    onChange={(value) => updateInput(field.key, value)}
+                    onFocus={() => setNumericInputFocused(true)}
+                    onBlur={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
+                  />
+                ))}
+              </div>
+            </section>
 
             <section className="panel">
               <div className="section-title">
@@ -335,6 +346,47 @@ export function App() {
             </div>
           </section>
         )}
+
+        {tab === 'guide' && (
+          <section className="stack">
+            <div className="section-title">
+              <h2>使い方</h2>
+              <span>guide</span>
+            </div>
+            <section className="panel guide-panel">
+              <h3>このアプリでできること</h3>
+              <p>残りカロリーとPFC、食べたい条件から、現実的な料理ベースの献立を3つ提案します。</p>
+            </section>
+            <section className="panel guide-panel">
+              <h3>kcal / P / F / C には何を入れる？</h3>
+              <p>今日の残り、またはこの1食で摂りたい目安を入力してください。Pはタンパク質、Fは脂質、Cは炭水化物です。</p>
+            </section>
+            <section className="panel guide-panel">
+              <h3>条件タグの使い方</h3>
+              <p>魚、鶏肉、豆腐、納豆、めかぶなど、食べたい方向性を選ぶと、その条件に合う料理を優先します。</p>
+            </section>
+            <section className="panel guide-panel">
+              <h3>提案結果の見方</h3>
+              <p>主食、主菜、副菜、汁物を基本に、必要に応じて追加候補を表示します。合計PFCと目標との差分を見て選んでください。</p>
+            </section>
+            <section className="panel guide-panel">
+              <h3>適合度の意味</h3>
+              <p>右上の適合度は、入力したkcal/P/F/Cにどれくらい近いかの目安です。高いほど入力値に近い候補です。</p>
+            </section>
+            <section className="panel guide-panel">
+              <h3>栄養値について</h3>
+              <p>数値は目安です。正確な栄養計算や商品ごとの差は、あすけん等の栄養管理アプリや商品ラベルで確認してください。</p>
+            </section>
+            <section className="panel guide-panel">
+              <h3>保存される内容</h3>
+              <p>入力したPFC、選択タグ、追加食品はこの端末のlocalStorageに保存されます。サーバーには送信しません。</p>
+            </section>
+            <section className="panel guide-panel">
+              <h3>ホーム画面に追加</h3>
+              <p>PWAとしてホーム画面に追加できます。追加すると、スマホアプリのように起動できます。</p>
+            </section>
+          </section>
+        )}
       </main>
 
       <nav className="bottom-nav" aria-label="主要ナビゲーション">
@@ -342,6 +394,7 @@ export function App() {
         <NavButton active={tab === 'results'} icon={<ChefHat size={20} />} label="結果" onClick={() => setTab('results')} />
         <NavButton active={tab === 'new-food'} icon={<Plus size={20} />} label="登録" onClick={() => setTab('new-food')} />
         <NavButton active={tab === 'foods'} icon={<BookOpen size={20} />} label="食品" onClick={() => setTab('foods')} />
+        <NavButton active={tab === 'guide'} icon={<CircleHelp size={20} />} label="使い方" onClick={() => setTab('guide')} />
       </nav>
       {numericInputFocused && <KeyboardDoneControl />}
     </div>
@@ -410,12 +463,15 @@ function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
       <div className="meal-heading">
         <div>
           <p className="eyebrow">
-            候補 {rank} / {meal.templateName}
+            候補 {rank} / {meal.label}
           </p>
           <h3>{meal.title}</h3>
           <p className="dish-name">料理ベースの献立</p>
         </div>
-        <span className="score">{Math.round(meal.score)}</span>
+        <span className="score">
+          <small>適合度</small>
+          <strong>{meal.fitScore}</strong>
+        </span>
       </div>
 
       <div className="meal-items">
@@ -467,10 +523,10 @@ function NavButton({ active, icon, label, onClick }: { active: boolean; icon: Re
 }
 
 const macroFields = [
-  { key: 'kcal', label: 'kcal', unit: 'kcal' },
-  { key: 'protein', label: 'P', unit: 'g' },
-  { key: 'fat', label: 'F', unit: 'g' },
-  { key: 'carb', label: 'C', unit: 'g' },
+  { key: 'kcal', label: '摂りたいカロリー', unit: 'kcal' },
+  { key: 'protein', label: '摂りたいタンパク質', unit: 'g' },
+  { key: 'fat', label: '摂りたい脂質', unit: 'g' },
+  { key: 'carb', label: '摂りたい炭水化物', unit: 'g' },
 ] as const;
 
 function categoryLabel(category: FoodCategory) {

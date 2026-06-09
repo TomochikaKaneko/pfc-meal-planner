@@ -47,6 +47,10 @@ npm run build
 
 `ingredients` は食品 DB の `foodId` と分量を参照します。`recipeUrl` は将来のレシピサイト連携用で、現時点では空文字でも構いません。
 
+料理カテゴリは `主食`、`主菜`、`副菜`、`汁物` を献立の基本構成として扱います。`乳製品`、`果物`、`飲料`、`間食`、`サプリ`、`調味料` は補助カテゴリで、献立名や主菜にはせず追加候補として扱います。
+
+料理には `mealTiming` を持たせ、`breakfast`、`lunch`、`dinner`、`snack` の食事タイミングに合わせて候補を絞り込みます。
+
 ## localStorage保存内容
 
 - `pfc-meal-planner:user-foods`: ユーザー追加食品の配列

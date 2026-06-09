@@ -171,6 +171,10 @@ button {
   gap: 12px;
 }
 
+.macro-grid.with-heading {
+  margin-top: 0;
+}
+
 .macro-grid.compact {
   gap: 10px;
 }
@@ -215,8 +219,23 @@ button {
   gap: 12px;
 }
 
+.section-title.vertical {
+  display: grid;
+  justify-content: stretch;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
 .section-title h2 {
   font-size: 1.05rem;
+}
+
+.section-title p {
+  margin: 0;
+  color: #60776d;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .section-title span,
@@ -313,13 +332,25 @@ button {
 
 .score {
   display: grid;
-  width: 42px;
-  height: 42px;
+  min-width: 58px;
+  min-height: 44px;
   place-items: center;
-  border-radius: 50%;
+  gap: 1px;
+  border-radius: 8px;
   color: #ffffff;
   background: #2f7d68;
+  padding: 6px 8px;
   font-weight: 900;
+}
+
+.score small {
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.score strong {
+  font-size: 1.05rem;
+  line-height: 1;
 }
 
 .meal-items {
@@ -413,6 +444,27 @@ button {
 .note-grid strong {
   display: block;
   color: #21302c;
+}
+
+.guide-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.guide-panel h3,
+.guide-panel p {
+  margin: 0;
+}
+
+.guide-panel h3 {
+  font-size: 0.98rem;
+}
+
+.guide-panel p {
+  color: #4f665d;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.65;
 }
 
 .form-panel {
@@ -527,7 +579,7 @@ button {
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   width: min(100%, 430px);
   margin: 0 auto;

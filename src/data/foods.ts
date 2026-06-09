@@ -98,7 +98,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'chicken-breast',
     name: '鶏むね肉',
-    category: 'protein',
+    category: 'main',
     standardAmount: '120g',
     kcal: 174,
     protein: 26.8,
@@ -111,7 +111,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'sasami',
     name: 'ささみ',
-    category: 'protein',
+    category: 'main',
     standardAmount: '120g',
     kcal: 126,
     protein: 27.6,
@@ -124,7 +124,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'egg',
     name: '卵',
-    category: 'protein',
+    category: 'main',
     standardAmount: '1個',
     kcal: 76,
     protein: 6.2,
@@ -137,7 +137,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'boiled-egg',
     name: 'ゆで卵',
-    category: 'protein',
+    category: 'main',
     standardAmount: '1個',
     kcal: 76,
     protein: 6.2,
@@ -150,7 +150,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'natto',
     name: '納豆',
-    category: 'protein',
+    category: 'main',
     standardAmount: '1パック',
     kcal: 90,
     protein: 7.4,
@@ -163,7 +163,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'silken-tofu',
     name: '絹豆腐',
-    category: 'protein',
+    category: 'main',
     standardAmount: '150g',
     kcal: 84,
     protein: 7.4,
@@ -176,7 +176,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'firm-tofu',
     name: '木綿豆腐',
-    category: 'protein',
+    category: 'main',
     standardAmount: '150g',
     kcal: 110,
     protein: 10.5,
@@ -189,7 +189,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'salmon',
     name: '鮭',
-    category: 'protein',
+    category: 'main',
     standardAmount: '1切れ',
     kcal: 145,
     protein: 22.3,
@@ -202,7 +202,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'tuna-sashimi',
     name: 'マグロ',
-    category: 'protein',
+    category: 'main',
     standardAmount: '100g',
     kcal: 115,
     protein: 26.4,
@@ -215,7 +215,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'canned-tuna',
     name: 'ツナ水煮',
-    category: 'protein',
+    category: 'main',
     standardAmount: '1缶',
     kcal: 72,
     protein: 16.0,
@@ -228,7 +228,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'mackerel-can',
     name: 'サバ缶',
-    category: 'protein',
+    category: 'main',
     standardAmount: '1/2缶',
     kcal: 190,
     protein: 20.9,
@@ -241,7 +241,7 @@ const foodSeeds: FoodSeed[] = [
   {
     id: 'protein-powder',
     name: 'プロテイン',
-    category: 'protein',
+    category: 'main',
     standardAmount: '1杯',
     kcal: 115,
     protein: 22.0,
@@ -504,7 +504,12 @@ const servingRules: Record<string, ServingRule> = {
 
 const defaultServingRules: Record<Food['category'], ServingRule> = {
   staple: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
-  protein: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
+  main: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
+  dairy: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
+  fruit: { baseServing: 1, servingUnit: '個', minServing: 1, maxServing: 1, step: 1 },
+  drink: { baseServing: 1, servingUnit: '杯', minServing: 1, maxServing: 1, step: 1 },
+  snack: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
+  supplement: { baseServing: 1, servingUnit: '回', minServing: 1, maxServing: 1, step: 1 },
   side: { baseServing: 1, servingUnit: '食', minServing: 1, maxServing: 1, step: 1 },
   soup: { baseServing: 1, servingUnit: '杯', minServing: 1, maxServing: 1, step: 1 },
   seasoning: { baseServing: 1, servingUnit: '回', minServing: 0, maxServing: 1, step: 1 },
