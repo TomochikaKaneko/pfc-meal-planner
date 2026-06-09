@@ -33,6 +33,9 @@ const categoryOptions: { value: FoodCategory; label: string }[] = [
   { value: 'seasoning', label: '調味料' },
 ];
 
+const categoryValues = new Set(categoryOptions.map((option) => option.value));
+const conditionValues = new Set(conditionOptions.map((option) => option.value));
+
 const defaultInput: MealInput = {
   kcal: 550,
   protein: 35,
@@ -56,8 +59,8 @@ type Tab = 'home' | 'results' | 'new-food' | 'foods' | 'guide';
 
 export function App() {
   const [tab, setTab] = useState<Tab>('home');
-  const [mealInput, setMealInput] = useState<MealInput>(() => loadJson(LAST_INPUT_KEY, defaultInput));
-  const [userFoods, setUserFoods] = useState<Food[]>(() => loadJson(USER_FOODS_KEY, []));
+  const [mealInput, setMealInput] = useState<MealInput>(() => loadMealInput());
+  const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
   const [results, setResults] = useState<MealCandidate[]>([]);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
   const [updateReady, setUpdateReady] = useState(false);
@@ -168,6 +171,12 @@ export function App() {
       )}
 
       <main className="screen">
+        {updateReady && (
+          <button className="update-later-inline" type="button" onClick={() => setUpdateReady(false)}>
+            あとで
+          </button>
+        )}
+
         {tab === 'home' && (
           <section className="stack">
             <div className="panel hero-panel">
@@ -551,15 +560,75 @@ function formatInputValue(value: number) {
   return String(value).replace(/^0+(?=\d)/, '');
 }
 
-function normalizeUserFoods(foods: Food[]): Food[] {
-  return foods.map((food) => ({
+function loadMealInput(): MealInput {
+  return normalizeMealInput(loadJson<unknown>(LAST_INPUT_KEY, defaultInput));
+}
+
+function loadUserFoods(): Food[] {
+  return normalizeUserFoods(loadJson<unknown>(USER_FOODS_KEY, []));
+}
+
+function normalizeMealInput(value: unknown): MealInput {
+  if (!isRecord(value)) return defaultInput;
+  const tags = Array.isArray(value.tags)
+    ? value.tags.filter((tag): tag is ConditionTag => typeof tag === 'string' && conditionValues.has(tag as ConditionTag))
+    : defaultInput.tags;
+
+  return {
+    kcal: safeNumber(value.kcal, defaultInput.kcal),
+    protein: safeNumber(value.protein, defaultInput.protein),
+    fat: safeNumber(value.fat, defaultInput.fat),
+    carb: safeNumber(value.carb, defaultInput.carb),
+    tags,
+  };
+}
+
+function normalizeUserFoods(foods: unknown): Food[] {
+  if (!Array.isArray(foods)) return [];
+  return foods.filter(isStoredFood).map((food) => ({
     ...food,
-    baseServing: food.baseServing ?? 1,
+    baseServing: safeNumber(food.baseServing, 1),
     servingUnit: food.servingUnit ?? '食',
-    minServing: food.minServing ?? 1,
-    maxServing: food.maxServing ?? 1,
-    step: food.step ?? 1,
+    minServing: safeNumber(food.minServing, 1),
+    maxServing: Math.max(safeNumber(food.minServing, 1), safeNumber(food.maxServing, 1)),
+    step: Math.max(0.1, safeNumber(food.step, 1)),
+    tags: Array.isArray(food.tags)
+      ? food.tags.filter((tag): tag is string => typeof tag === 'string' && Boolean(tag.trim())).map((tag) => tag.trim())
+      : [],
+    pairsWith: Array.isArray(food.pairsWith)
+      ? food.pairsWith.filter((pair): pair is string => typeof pair === 'string' && Boolean(pair.trim())).map((pair) => pair.trim())
+      : [],
+    source: 'user',
   }));
+}
+
+function isStoredFood(value: unknown): value is Food {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    value.name.trim().length > 0 &&
+    typeof value.category === 'string' &&
+    categoryValues.has(value.category as FoodCategory) &&
+    typeof value.standardAmount === 'string' &&
+    value.standardAmount.trim().length > 0 &&
+    macroFields.every((field) => {
+      const fieldValue = value[field.key];
+      return typeof fieldValue === 'number' && Number.isFinite(fieldValue) && fieldValue >= 0;
+    }) &&
+    (!('tags' in value) || Array.isArray(value.tags)) &&
+    (!('pairsWith' in value) || Array.isArray(value.pairsWith)) &&
+    (!('servingUnit' in value) || typeof value.servingUnit === 'string')
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function safeNumber(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
 function loadJson<T>(key: string, fallback: T): T {

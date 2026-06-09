@@ -27,7 +27,6 @@ const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
     window.dispatchEvent(new CustomEvent('pwa-update-ready'));
-    window.setTimeout(() => updateSW(true), 800);
   },
   onRegisteredSW(_swUrl, registration) {
     registration?.update().catch(() => undefined);

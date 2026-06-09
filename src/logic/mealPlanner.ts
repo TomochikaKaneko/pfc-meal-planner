@@ -111,7 +111,7 @@ const macroKeys = ['kcal', 'protein', 'fat', 'carb'] as const;
 
 export function createMealCandidates(input: MealInput, foods: Food[], recipes: Recipe[] = initialRecipes): MealCandidate[] {
   const foodMap = new Map(foods.map((food) => [food.id, food]));
-  const recipePool = recipes.filter((recipe) => recipe.ingredients.every((ingredient) => foodMap.has(ingredient.foodId)));
+  const recipePool = [...recipes, ...createUserFoodRecipes(foods)].filter((recipe) => isUsableRecipe(recipe, foodMap));
   const candidates = mealTemplates.flatMap((template) => buildTemplateCandidates(template, input, foodMap, recipePool));
 
   return diversifyCandidates(candidates.filter((candidate) => isNaturalMeal(candidate.items)), input).map((candidate, index) => ({
@@ -139,7 +139,10 @@ function buildTemplateCandidates(template: MealTemplate, input: MealInput, foodM
         for (const soup of rolePools[3].recipes) {
           const selected = [staple, main, side, soup];
           if (new Set(selected.map((recipe) => recipe.id)).size !== selected.length) continue;
-          const items = selected.map((recipe, index) => buildMealItem(recipe, template.roles[index].role, foodMap));
+          const items = selected
+            .map((recipe, index) => buildMealItem(recipe, template.roles[index].role, foodMap))
+            .filter(isMealItem);
+          if (items.length !== selected.length) continue;
           const withExtra = addOptionalExtra(items, template, input, foodMap, recipes);
           const tunedItems = tuneWhiteRiceServing(withExtra, input);
           const totals = sumMacros(tunedItems.map((item) => item.macros));
@@ -167,18 +170,21 @@ function buildTemplateCandidates(template: MealTemplate, input: MealInput, foodM
   return candidates;
 }
 
-function buildMealItem(recipe: Recipe, role: string, foodMap: Map<string, Food>): MealItem {
-  const ingredients = recipe.ingredients.map((ingredient): MealIngredient => {
+function buildMealItem(recipe: Recipe, role: string, foodMap: Map<string, Food>): MealItem | null {
+  if (!isUsableRecipe(recipe, foodMap)) return null;
+
+  const ingredients: MealIngredient[] = [];
+  for (const ingredient of recipe.ingredients) {
     const food = foodMap.get(ingredient.foodId);
-    if (!food) throw new Error(`Missing food: ${ingredient.foodId}`);
+    if (!food) return null;
     const serving = clampToStep(ingredient.serving, food);
-    return {
+    ingredients.push({
       food,
       serving,
       amount: formatServing(serving, food.servingUnit),
       macros: scaleMacros(food, serving),
-    };
-  });
+    });
+  }
 
   return {
     recipe,
@@ -208,6 +214,7 @@ function addOptionalExtra(
     .filter((recipe) => matchesMealTiming(recipe, template) || recipe.mealTiming.includes('snack'))
     .filter((recipe) => !usedIds.has(recipe.id))
     .map((recipe) => buildMealItem(recipe, '追加', foodMap))
+    .filter(isMealItem)
     .filter((item) => item.macros.kcal <= Math.max(180, kcalGap + 60))
     .sort((a, b) => {
       const aProteinFit = Math.abs(proteinGap - a.macros.protein);
@@ -272,9 +279,10 @@ function scoreRecipe(recipe: Recipe, preferTags: string[], avoidTags: string[], 
   const avoidPenalty = avoidTags.filter((tag) => recipe.tags.includes(tag)).length * 50;
   const lowFatBonus = input.tags.includes('low-fat') && recipe.tags.includes('low-fat') ? 80 : 0;
   const proteinBonus = input.tags.includes('high-protein') && recipe.tags.includes('high-protein') ? 80 : 0;
+  const userFoodBonus = recipe.id.startsWith('generated-recipe-') ? 140 : 0;
   const timingBonus = matchesMealTiming(recipe, template) ? 18 : 0;
   const timeBonus = Math.max(0, 18 - recipe.cookingTime);
-  return tagScore + directTagScore + preferScore + lowFatBonus + proteinBonus + timingBonus + timeBonus - avoidPenalty;
+  return tagScore + directTagScore + preferScore + lowFatBonus + proteinBonus + userFoodBonus + timingBonus + timeBonus - avoidPenalty;
 }
 
 function scoreMeal(template: MealTemplate, items: MealItem[], totals: MacroProfile, diff: MacroProfile, input: MealInput) {
@@ -286,10 +294,13 @@ function scoreMeal(template: MealTemplate, items: MealItem[], totals: MacroProfi
   const tagScore = items.flatMap((item) => item.recipe.tags).filter((tag) => selectedTags.includes(tag)).length * 42;
   const lowFatScore = input.tags.includes('low-fat') ? Math.max(0, 180 - totals.fat * 7) : 0;
   const highProteinScore = input.tags.includes('high-protein') ? totals.protein * 3.2 : 0;
+  const userFoodScore = items.some((item) => item.recipe.id.startsWith('generated-recipe-')) ? 260 : 0;
   const structureScore = hasRole(items, '主食') && hasRole(items, '主菜') && hasRole(items, '副菜') ? 80 : -120;
   const templateScore = items.some((item) => item.recipe.tags.includes(template.id)) ? 12 : 0;
 
-  return round1(kcalScore + pScore + fScore + cScore + tagScore + lowFatScore + highProteinScore + structureScore + templateScore);
+  return round1(
+    kcalScore + pScore + fScore + cScore + tagScore + lowFatScore + highProteinScore + userFoodScore + structureScore + templateScore,
+  );
 }
 
 function isNaturalMeal(items: MealItem[]) {
@@ -453,6 +464,79 @@ function formatServing(value: number, unit: string) {
 
 function expandTags(tags: ConditionTag[]) {
   return [...new Set(tags.flatMap((tag) => tagAliases[tag] ?? [tag]))];
+}
+
+function createUserFoodRecipes(foods: Food[]): Recipe[] {
+  return foods.filter((food) => food.source === 'user' && isUsableFood(food)).map((food) => ({
+    id: `generated-recipe-${food.id}`,
+    name: getGeneratedRecipeName(food),
+    category: food.category === 'seasoning' ? 'side' : food.category,
+    ingredients: [{ foodId: food.id, serving: food.baseServing }],
+    tags: [
+      ...new Set(
+        [
+          ...food.tags,
+          food.category,
+          food.protein >= 15 ? 'high-protein' : '',
+          food.fat <= 5 ? 'low-fat' : '',
+        ].filter(Boolean),
+      ),
+    ],
+    mealTiming: getGeneratedMealTiming(food),
+    description: `${food.name}を使った簡易料理候補です。`,
+    cookingTime: 5,
+    difficulty: 'easy',
+    recipeUrl: '',
+  }));
+}
+
+function getGeneratedRecipeName(food: Food) {
+  if (food.category === 'main') return `${food.name}のシンプル定食`;
+  if (food.category === 'staple') return `${food.name}の主食`;
+  if (food.category === 'side') return `${food.name}の小鉢`;
+  if (food.category === 'soup') return food.name;
+  if (['dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(food.category)) return food.name;
+  return `${food.name}の追加候補`;
+}
+
+function getGeneratedMealTiming(food: Food): Recipe['mealTiming'] {
+  if (['dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(food.category)) return ['snack'];
+  return ['breakfast', 'lunch', 'dinner'];
+}
+
+function isUsableRecipe(recipe: Recipe, foodMap: Map<string, Food>) {
+  return (
+    Boolean(recipe?.id && recipe.name && recipe.category) &&
+    Array.isArray(recipe.ingredients) &&
+    recipe.ingredients.length > 0 &&
+    recipe.ingredients.every(
+      (ingredient) =>
+        typeof ingredient.foodId === 'string' &&
+        Number.isFinite(ingredient.serving) &&
+        ingredient.serving > 0 &&
+        foodMap.has(ingredient.foodId),
+    ) &&
+    Array.isArray(recipe.tags) &&
+    Array.isArray(recipe.mealTiming)
+  );
+}
+
+function isUsableFood(food: Food) {
+  return (
+    Boolean(food?.id && food.name && food.category) &&
+    macroKeys.every((key) => Number.isFinite(food[key]) && food[key] >= 0) &&
+    Number.isFinite(food.baseServing) &&
+    food.baseServing > 0 &&
+    Number.isFinite(food.minServing) &&
+    Number.isFinite(food.maxServing) &&
+    Number.isFinite(food.step) &&
+    food.step > 0 &&
+    Array.isArray(food.tags)
+  );
+}
+
+function isMealItem(item: MealItem | null): item is MealItem {
+  return item !== null;
 }
 
 function round1(value: number) {
