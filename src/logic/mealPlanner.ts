@@ -501,7 +501,7 @@ function getGeneratedRecipeName(food: Food) {
 
 function getGeneratedMealTiming(food: Food): Recipe['mealTiming'] {
   if (['dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(food.category)) return ['snack'];
-  return ['breakfast', 'lunch', 'dinner'];
+  return food.mealTiming.length > 0 ? food.mealTiming.filter((timing) => timing !== 'snack') : ['breakfast', 'lunch', 'dinner'];
 }
 
 function isUsableRecipe(recipe: Recipe, foodMap: Map<string, Food>) {
@@ -531,7 +531,8 @@ function isUsableFood(food: Food) {
     Number.isFinite(food.maxServing) &&
     Number.isFinite(food.step) &&
     food.step > 0 &&
-    Array.isArray(food.tags)
+    Array.isArray(food.tags) &&
+    Array.isArray(food.mealTiming)
   );
 }
 

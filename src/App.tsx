@@ -117,6 +117,7 @@ export function App() {
       id: `user-${crypto.randomUUID()}`,
       name: foodForm.name.trim(),
       category: foodForm.category,
+      mealTiming: getDefaultFoodMealTiming(foodForm.category),
       standardAmount: foodForm.standardAmount.trim(),
       kcal: Number(foodForm.kcal),
       protein: Number(foodForm.protein),
@@ -592,6 +593,11 @@ function normalizeUserFoods(foods: unknown): Food[] {
     minServing: safeNumber(food.minServing, 1),
     maxServing: Math.max(safeNumber(food.minServing, 1), safeNumber(food.maxServing, 1)),
     step: Math.max(0.1, safeNumber(food.step, 1)),
+    mealTiming: Array.isArray(food.mealTiming)
+      ? food.mealTiming.filter((timing): timing is Food['mealTiming'][number] =>
+          ['breakfast', 'lunch', 'dinner', 'snack'].includes(String(timing)),
+        )
+      : getDefaultFoodMealTiming(food.category),
     tags: Array.isArray(food.tags)
       ? food.tags.filter((tag): tag is string => typeof tag === 'string' && Boolean(tag.trim())).map((tag) => tag.trim())
       : [],
@@ -629,6 +635,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function safeNumber(value: unknown, fallback: number) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
+}
+
+function getDefaultFoodMealTiming(category: FoodCategory): Food['mealTiming'] {
+  if (category === 'dairy' || category === 'fruit' || category === 'snack' || category === 'supplement') return ['breakfast', 'snack'];
+  if (category === 'drink') return ['breakfast', 'lunch', 'dinner', 'snack'];
+  if (category === 'seasoning') return ['breakfast', 'lunch', 'dinner'];
+  if (category === 'main') return ['lunch', 'dinner'];
+  return ['breakfast', 'lunch', 'dinner'];
 }
 
 function loadJson<T>(key: string, fallback: T): T {

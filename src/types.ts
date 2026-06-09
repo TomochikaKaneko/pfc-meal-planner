@@ -48,6 +48,7 @@ export interface Food extends MacroProfile {
   id: string;
   name: string;
   category: FoodCategory;
+  mealTiming: MealTiming[];
   standardAmount: string;
   baseServing: number;
   servingUnit: string;
