@@ -7,6 +7,7 @@ import type { ConditionTag, Food, FoodCategory, MacroKey, MealCandidate, MealInp
 
 const USER_FOODS_KEY = 'pfc-meal-planner:user-foods';
 const LAST_INPUT_KEY = 'pfc-meal-planner:last-input';
+const FREE_CONDITION_KEY = 'pfc-meal-planner:free-condition';
 
 const conditionOptions: { value: ConditionTag; label: string }[] = [
   { value: 'white-rice', label: '白米' },
@@ -60,6 +61,7 @@ type Tab = 'home' | 'results' | 'new-food' | 'foods' | 'guide';
 export function App() {
   const [tab, setTab] = useState<Tab>('home');
   const [mealInput, setMealInput] = useState<MealInput>(() => loadMealInput());
+  const [freeCondition, setFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
   const [results, setResults] = useState<MealCandidate[]>([]);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
@@ -68,6 +70,7 @@ export function App() {
   const [numericInputFocused, setNumericInputFocused] = useState(false);
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
+  const freeConditionTerms = useMemo(() => parseFreeCondition(freeCondition), [freeCondition]);
 
   useEffect(() => {
     const showUpdate = () => setUpdateReady(true);
@@ -94,6 +97,11 @@ export function App() {
     localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(next));
   }
 
+  function updateFreeCondition(value: string) {
+    setFreeCondition(value);
+    localStorage.setItem(FREE_CONDITION_KEY, value);
+  }
+
   function toggleTag(tag: ConditionTag) {
     const exists = mealInput.tags.includes(tag);
     updateTags(exists ? mealInput.tags.filter((item) => item !== tag) : [...mealInput.tags, tag]);
@@ -105,6 +113,7 @@ export function App() {
       { ...mealInput },
     );
     const candidates = createMealCandidates(safeInput, foods);
+    void freeConditionTerms;
     setResults(candidates);
     setTab('results');
   }
@@ -156,8 +165,13 @@ export function App() {
           <p className="eyebrow">PWA meal assistant</p>
           <h1>PFC献立サポート</h1>
         </div>
-        <div className="app-mark" aria-hidden="true">
-          <ChefHat size={24} />
+        <div className="header-actions">
+          <button className="header-icon-button" type="button" aria-label="ホームへ戻る" onClick={() => setTab('home')}>
+            <Home size={20} />
+          </button>
+          <button className="header-icon-button" type="button" aria-label="使い方を見る" onClick={() => setTab('guide')}>
+            <CircleHelp size={20} />
+          </button>
         </div>
       </header>
 
@@ -235,6 +249,8 @@ export function App() {
               </div>
             </section>
 
+            <FreeConditionField value={freeCondition} onChange={updateFreeCondition} />
+
             <button className="primary-action" type="button" onClick={suggestMeals}>
               <Sparkles size={20} />
               献立を提案する
@@ -250,6 +266,22 @@ export function App() {
                 条件を調整
               </button>
             </div>
+
+            <MealConditionEditor
+              compact
+              mealInput={mealInput}
+              freeCondition={freeCondition}
+              onMacroChange={updateInput}
+              onToggleTag={toggleTag}
+              onFreeConditionChange={updateFreeCondition}
+              onFocusNumber={() => setNumericInputFocused(true)}
+              onBlurNumber={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
+            />
+
+            <button className="primary-action" type="button" onClick={suggestMeals}>
+              <RefreshCw size={20} />
+              再提案
+            </button>
 
             {results.length === 0 ? (
               <div className="empty-state">
@@ -299,7 +331,7 @@ export function App() {
                 {macroFields.map((field) => (
                   <MacroInput
                     key={field.key}
-                  label={field.label}
+                  label={foodMacroLabel(field.key)}
                   value={foodForm[field.key]}
                   onChange={(value) => setFoodForm({ ...foodForm, [field.key]: parseMacroValue(value) })}
                   onFocus={() => setNumericInputFocused(true)}
@@ -309,6 +341,7 @@ export function App() {
               </div>
               <label>
                 タグ
+                <span className="field-help">タグは献立提案で利用します。例: 高タンパク、低脂質、魚、鶏肉、豆腐、納豆、キムチ、朝向き、間食向き</span>
                 <input
                   value={foodForm.tags}
                   onChange={(event) => setFoodForm({ ...foodForm, tags: event.target.value })}
@@ -329,9 +362,11 @@ export function App() {
               <h2>食品一覧</h2>
               <span>{foods.length}件</span>
             </div>
-            <div className="food-list">
-              {foods.map((food) => (
-                <article className="food-row" key={food.id}>
+            <div className="food-list grouped">
+              {foodsByCategoryOrder(foods).map(({ food, showHeading }) => (
+                <div className="food-row-wrap" key={food.id}>
+                  {showHeading && <h3 className="food-category-heading">{categoryLabel(food.category)}</h3>}
+                <article className="food-row">
                   <div>
                     <div className="food-row-title">
                       <strong>{food.name}</strong>
@@ -352,6 +387,7 @@ export function App() {
                     </button>
                   )}
                 </article>
+                </div>
               ))}
             </div>
           </section>
@@ -467,6 +503,83 @@ function KeyboardDoneControl() {
   );
 }
 
+function MealConditionEditor({
+  compact = false,
+  mealInput,
+  freeCondition,
+  onMacroChange,
+  onToggleTag,
+  onFreeConditionChange,
+  onFocusNumber,
+  onBlurNumber,
+}: {
+  compact?: boolean;
+  mealInput: MealInput;
+  freeCondition: string;
+  onMacroChange: (key: MacroKey, value: string) => void;
+  onToggleTag: (tag: ConditionTag) => void;
+  onFreeConditionChange: (value: string) => void;
+  onFocusNumber: () => void;
+  onBlurNumber: () => void;
+}) {
+  return (
+    <section className={compact ? 'panel condition-editor compact-editor' : 'panel condition-editor'}>
+      <div className="section-title vertical">
+        <h2>{compact ? '条件を編集' : 'この食事で摂りたい目安'}</h2>
+        <p>今日の残りや、この1食で摂りたい kcal / P / F / C と食べたい条件を入力してください。</p>
+      </div>
+      <div className="macro-grid with-heading">
+        {macroFields.map((field) => (
+          <MacroInput
+            key={field.key}
+            label={field.label}
+            unit={field.unit}
+            value={mealInput[field.key]}
+            onChange={(value) => onMacroChange(field.key, value)}
+            onFocus={onFocusNumber}
+            onBlur={onBlurNumber}
+          />
+        ))}
+      </div>
+      <div className="condition-block">
+        <div className="section-title">
+          <h2>食べたい条件</h2>
+          <span>{mealInput.tags.length}個</span>
+        </div>
+        <div className="tag-grid">
+          {conditionOptions.map((option) => (
+            <button
+              type="button"
+              className={mealInput.tags.includes(option.value) ? 'tag selected' : 'tag'}
+              key={option.value}
+              onClick={() => onToggleTag(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <FreeConditionField embedded value={freeCondition} onChange={onFreeConditionChange} />
+    </section>
+  );
+}
+
+function FreeConditionField({ embedded = false, value, onChange }: { embedded?: boolean; value: string; onChange: (value: string) => void }) {
+  const content = (
+      <label>
+        食べたいもの・家にあるもの
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={'例: 胸肉 ご飯 キムチ\n魚 さっぱり\n納豆 卵\nガッツリ 韓国料理'}
+          rows={4}
+        />
+      </label>
+  );
+
+  return embedded ? <div className="free-condition-panel embedded">{content}</div> : <section className="panel free-condition-panel">{content}</section>;
+}
+
 function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
   return (
     <article className="meal-card">
@@ -541,6 +654,34 @@ const macroFields = [
 
 function categoryLabel(category: FoodCategory) {
   return categoryOptions.find((option) => option.value === category)?.label ?? category;
+}
+
+function foodMacroLabel(key: MacroKey) {
+  const labels: Record<MacroKey, string> = {
+    kcal: '食品のカロリー(kcal)',
+    protein: '食品のタンパク質(g)',
+    fat: '食品の脂質(g)',
+    carb: '食品の炭水化物(g)',
+  };
+  return labels[key];
+}
+
+function parseFreeCondition(value: string) {
+  return value
+    .split(/[\s、,，\n\r]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function foodsByCategoryOrder(foods: Food[]) {
+  const sorted = [...foods].sort((a, b) => {
+    const categoryDiff = categoryOptions.findIndex((option) => option.value === a.category) - categoryOptions.findIndex((option) => option.value === b.category);
+    return categoryDiff || a.name.localeCompare(b.name, 'ja');
+  });
+  return sorted.map((food, index) => ({
+    food,
+    showHeading: index === 0 || sorted[index - 1].category !== food.category,
+  }));
 }
 
 function sanitizeNumericInput(value: string) {

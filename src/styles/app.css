@@ -20,7 +20,8 @@ body,
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -55,6 +56,24 @@ button {
 
 .app-header h1 {
   font-size: 1.45rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon-button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #2f7d68;
+  box-shadow: 0 12px 28px rgba(35, 94, 77, 0.16);
 }
 
 .eyebrow {
@@ -289,6 +308,50 @@ button {
   background: #2f7d68;
 }
 
+.condition-editor {
+  display: grid;
+  gap: 16px;
+}
+
+.compact-editor .macro-card {
+  padding: 12px;
+}
+
+.condition-block {
+  display: grid;
+  gap: 10px;
+}
+
+.free-condition-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.free-condition-panel.embedded {
+  padding-top: 2px;
+}
+
+.free-condition-panel label {
+  display: grid;
+  gap: 8px;
+  color: #425f54;
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.free-condition-panel textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  border: 1px solid rgba(47, 125, 104, 0.18);
+  border-radius: 8px;
+  padding: 12px;
+  color: #17211e;
+  background: #f8fbf8;
+  outline-color: #2f7d68;
+  line-height: 1.5;
+}
+
 .primary-action {
   display: flex;
   align-items: center;
@@ -492,8 +555,16 @@ button {
   font-weight: 850;
 }
 
+.field-help {
+  color: #60776d;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .form-panel input,
-.form-panel select {
+.form-panel select,
+.form-panel textarea {
   width: 100%;
   min-height: 48px;
   border: 1px solid rgba(47, 125, 104, 0.18);
@@ -507,6 +578,22 @@ button {
 .food-list {
   display: grid;
   gap: 10px;
+}
+
+.food-list.grouped {
+  gap: 16px;
+}
+
+.food-row-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.food-category-heading {
+  margin: 8px 2px 0;
+  color: #315346;
+  font-size: 0.96rem;
+  font-weight: 900;
 }
 
 .food-row {
