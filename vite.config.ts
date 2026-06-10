@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: null,
-      includeAssets: ['icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'],
+      includeAssets: ['icons/favicon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'PFC献立サポート',
         short_name: 'PFC献立サポート',
@@ -21,12 +21,6 @@ export default defineConfig({
         background_color: '#eef4ef',
         theme_color: '#2f7d68',
         icons: [
-          {
-            src: '/icons/icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any maskable',
-          },
           {
             src: '/icons/icon-192.png',
             sizes: '192x192',
