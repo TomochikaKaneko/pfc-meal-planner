@@ -42,7 +42,7 @@ const defaultInput: MealInput = {
   protein: 35,
   fat: 15,
   carb: 70,
-  tags: ['low-fat', 'high-protein'],
+  tags: [],
 };
 
 const emptyFoodForm = {
@@ -235,6 +235,7 @@ export function App() {
                 <h2>食べたい条件</h2>
                 <span>{mealInput.tags.length}個</span>
               </div>
+              <p className="field-help">タグは献立提案で利用します。必要なものだけ選んでください。</p>
               <div className="tag-grid">
                 {conditionOptions.map((option) => (
                   <button
@@ -546,6 +547,7 @@ function MealConditionEditor({
           <h2>食べたい条件</h2>
           <span>{mealInput.tags.length}個</span>
         </div>
+        <p className="field-help">タグは献立提案で利用します。必要なものだけ選んでください。</p>
         <div className="tag-grid">
           {conditionOptions.map((option) => (
             <button
