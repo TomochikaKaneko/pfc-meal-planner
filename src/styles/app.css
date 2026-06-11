@@ -367,11 +367,140 @@ button {
   font-weight: 900;
 }
 
+.primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  box-shadow: none;
+}
+
+.secondary-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(47, 125, 104, 0.22);
+  border-radius: 8px;
+  color: #2f7d68;
+  background: #ffffff;
+  font-weight: 900;
+}
+
+.compact-action {
+  min-height: 48px;
+  box-shadow: 0 10px 20px rgba(240, 122, 79, 0.18);
+}
+
+.results-screen {
+  padding-bottom: 4px;
+}
+
+.results-screen > .primary-action {
+  display: none;
+}
+
+.result-bottom-spacer {
+  height: 128px;
+}
+
+.result-replan-bar {
+  position: fixed;
+  right: 0;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  left: 0;
+  z-index: 16;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  width: min(100%, 430px);
+  margin: 0 auto;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(47, 125, 104, 0.12);
+  background: rgba(248, 251, 248, 0.96);
+  box-shadow: 0 -14px 28px rgba(35, 65, 54, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.saved-condition-note {
+  justify-self: center;
+  color: #2f7d68;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  align-items: end;
+  width: min(100%, 430px);
+  margin: 0 auto;
+  background: rgba(15, 32, 26, 0.38);
+}
+
+.replan-sheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: min(86dvh, 760px);
+  border-radius: 16px 16px 0 0;
+  background: #f8fbf8;
+  box-shadow: 0 -20px 44px rgba(20, 48, 38, 0.22);
+  overflow: hidden;
+}
+
+.replan-sheet-header {
+  display: grid;
+  gap: 6px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(47, 125, 104, 0.12);
+  background: #ffffff;
+}
+
+.replan-sheet-header h2,
+.replan-sheet-header p {
+  margin: 0;
+}
+
+.replan-sheet-header h2 {
+  font-size: 1.05rem;
+}
+
+.replan-sheet-header p {
+  color: #60776d;
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.replan-sheet-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.replan-sheet-body .condition-editor {
+  box-shadow: none;
+}
+
+.replan-sheet-actions {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(47, 125, 104, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+}
+
 .keyboard-done-control {
   position: fixed;
   right: max(18px, calc((100vw - 430px) / 2 + 18px));
   bottom: calc(92px + env(safe-area-inset-bottom));
-  z-index: 20;
+  z-index: 40;
   min-width: 76px;
   min-height: 36px;
   border: 1px solid rgba(47, 125, 104, 0.16);
@@ -580,9 +709,16 @@ button {
   gap: 10px;
 }
 
+.food-browser {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: calc(100dvh - 154px - env(safe-area-inset-bottom));
+}
+
 .food-filter-panel {
   display: grid;
   gap: 14px;
+  min-height: 128px;
+  align-content: start;
 }
 
 .food-search-field {
@@ -638,6 +774,20 @@ button {
 
 .food-list.grouped {
   gap: 16px;
+}
+
+.food-results {
+  min-height: 300px;
+  max-height: calc(100dvh - 306px - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  padding-right: 2px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.food-results .empty-state {
+  min-height: 260px;
+  align-content: center;
 }
 
 .food-row-wrap {

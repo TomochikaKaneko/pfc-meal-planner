@@ -70,10 +70,13 @@ export function App() {
   const [updateReady, setUpdateReady] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [numericInputFocused, setNumericInputFocused] = useState(false);
+  const [isReplanModalOpen, setIsReplanModalOpen] = useState(false);
+  const [draftMealInput, setDraftMealInput] = useState<MealInput>(() => loadMealInput());
+  const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
+  const [hasSavedReplanCondition, setHasSavedReplanCondition] = useState(false);
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
   const filteredFoods = useMemo(() => filterFoods(foods, foodSearch, foodCategoryFilter), [foods, foodSearch, foodCategoryFilter]);
-  const freeConditionTerms = useMemo(() => parseFreeCondition(freeCondition), [freeCondition]);
 
   useEffect(() => {
     const showUpdate = () => setUpdateReady(true);
@@ -111,13 +114,50 @@ export function App() {
   }
 
   function suggestMeals() {
+    generateMeals(mealInput, freeCondition);
+  }
+
+  function generateMeals(input: MealInput, condition: string) {
     const safeInput = macroFields.reduce(
-      (acc, field) => ({ ...acc, [field.key]: normalizeMacroTarget(mealInput[field.key], null) }),
-      { ...mealInput },
+      (acc, field) => ({ ...acc, [field.key]: normalizeMacroTarget(input[field.key], null) }),
+      { ...input },
     );
-    const candidates = createMealCandidates(safeInput, foods, undefined, freeConditionTerms);
+    const candidates = createMealCandidates(safeInput, foods, undefined, parseFreeCondition(condition));
     setResults(candidates);
+    setHasSavedReplanCondition(false);
     setTab('results');
+  }
+
+  function openReplanModal() {
+    setDraftMealInput(mealInput);
+    setDraftFreeCondition(freeCondition);
+    setIsReplanModalOpen(true);
+  }
+
+  function updateDraftInput(key: MacroKey, rawValue: string) {
+    setDraftMealInput((current) => ({ ...current, [key]: parseMacroValue(rawValue) }));
+  }
+
+  function toggleDraftTag(tag: ConditionTag) {
+    setDraftMealInput((current) => {
+      const exists = current.tags.includes(tag);
+      return { ...current, tags: exists ? current.tags.filter((item) => item !== tag) : [...current.tags, tag] };
+    });
+  }
+
+  function saveReplanCondition() {
+    setMealInput(draftMealInput);
+    setFreeCondition(draftFreeCondition);
+    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(draftMealInput));
+    localStorage.setItem(FREE_CONDITION_KEY, draftFreeCondition);
+    setHasSavedReplanCondition(true);
+    setIsReplanModalOpen(false);
+  }
+
+  function executeSavedReplan() {
+    if (!hasSavedReplanCondition) return;
+    generateMeals(mealInput, freeCondition);
+    setHasSavedReplanCondition(false);
   }
 
   function saveFood(event: FormEvent<HTMLFormElement>) {
@@ -262,24 +302,13 @@ export function App() {
         )}
 
         {tab === 'results' && (
-          <section className="stack">
+          <section className="stack results-screen">
             <div className="section-title">
               <h2>提案結果</h2>
               <button className="text-button" type="button" onClick={() => setTab('home')}>
                 条件を調整
               </button>
             </div>
-
-            <MealConditionEditor
-              compact
-              mealInput={mealInput}
-              freeCondition={freeCondition}
-              onMacroChange={updateInput}
-              onToggleTag={toggleTag}
-              onFreeConditionChange={updateFreeCondition}
-              onFocusNumber={() => setNumericInputFocused(true)}
-              onBlurNumber={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
-            />
 
             <button className="primary-action" type="button" onClick={suggestMeals}>
               <RefreshCw size={20} />
@@ -294,6 +323,7 @@ export function App() {
             ) : (
               results.map((meal, index) => <MealCard meal={meal} rank={index + 1} key={meal.id} />)
             )}
+            <div className="result-bottom-spacer" />
           </section>
         )}
 
@@ -360,7 +390,7 @@ export function App() {
         )}
 
         {tab === 'foods' && (
-          <section className="stack">
+          <section className="stack food-browser">
             <div className="section-title">
               <h2>食品一覧</h2>
               <span>{foodCategoryFilter === 'all' ? 'すべて' : categoryLabel(foodCategoryFilter)} {filteredFoods.length}件</span>
@@ -394,7 +424,7 @@ export function App() {
                 ))}
               </div>
             </section>
-            <div className="food-list grouped">
+            <div className="food-list grouped food-results">
               {filteredFoods.length === 0 ? (
                 <div className="empty-state">
                   <BookOpen size={34} />
@@ -472,6 +502,33 @@ export function App() {
         )}
       </main>
 
+      {tab === 'results' && (
+        <div className="result-replan-bar">
+          {hasSavedReplanCondition && <span className="saved-condition-note">条件を保存しました</span>}
+          <button className="secondary-action" type="button" onClick={openReplanModal}>
+            条件を変更して再提案
+          </button>
+          <button className="primary-action compact-action" type="button" disabled={!hasSavedReplanCondition} onClick={executeSavedReplan}>
+            <RefreshCw size={18} />
+            再提案を実行
+          </button>
+        </div>
+      )}
+
+      {isReplanModalOpen && (
+        <ReplanConditionModal
+          mealInput={draftMealInput}
+          freeCondition={draftFreeCondition}
+          onMacroChange={updateDraftInput}
+          onToggleTag={toggleDraftTag}
+          onFreeConditionChange={setDraftFreeCondition}
+          onCancel={() => setIsReplanModalOpen(false)}
+          onSave={saveReplanCondition}
+          onFocusNumber={() => setNumericInputFocused(true)}
+          onBlurNumber={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
+        />
+      )}
+
       <nav className="bottom-nav" aria-label="主要ナビゲーション">
         <NavButton active={tab === 'home'} icon={<Home size={20} />} label="ホーム" onClick={() => setTab('home')} />
         <NavButton active={tab === 'results'} icon={<ChefHat size={20} />} label="結果" onClick={() => setTab('results')} />
@@ -537,6 +594,59 @@ function KeyboardDoneControl() {
     >
       ✓ 完了
     </button>
+  );
+}
+
+function ReplanConditionModal({
+  mealInput,
+  freeCondition,
+  onMacroChange,
+  onToggleTag,
+  onFreeConditionChange,
+  onCancel,
+  onSave,
+  onFocusNumber,
+  onBlurNumber,
+}: {
+  mealInput: MealInput;
+  freeCondition: string;
+  onMacroChange: (key: MacroKey, value: string) => void;
+  onToggleTag: (tag: ConditionTag) => void;
+  onFreeConditionChange: (value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+  onFocusNumber: () => void;
+  onBlurNumber: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="replan-title">
+      <section className="replan-sheet">
+        <div className="replan-sheet-header">
+          <h2 id="replan-title">再提案条件</h2>
+          <p>保存してから、結果画面の再提案ボタンで候補を作り直します。</p>
+        </div>
+        <div className="replan-sheet-body">
+          <MealConditionEditor
+            compact
+            mealInput={mealInput}
+            freeCondition={freeCondition}
+            onMacroChange={onMacroChange}
+            onToggleTag={onToggleTag}
+            onFreeConditionChange={onFreeConditionChange}
+            onFocusNumber={onFocusNumber}
+            onBlurNumber={onBlurNumber}
+          />
+        </div>
+        <div className="replan-sheet-actions">
+          <button className="secondary-action" type="button" onClick={onCancel}>
+            キャンセル
+          </button>
+          <button className="primary-action compact-action" type="button" onClick={onSave}>
+            保存
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
