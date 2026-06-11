@@ -1,5 +1,16 @@
 import { initialRecipes } from '../data/recipes';
-import type { ConditionTag, Food, MacroProfile, MealCandidate, MealIngredient, MealInput, MealItem, Recipe } from '../types';
+import type {
+  ConditionTag,
+  Food,
+  MacroDiffProfile,
+  MacroKey,
+  MacroProfile,
+  MealCandidate,
+  MealIngredient,
+  MealInput,
+  MealItem,
+  Recipe,
+} from '../types';
 
 type MealTemplate = {
   id: string;
@@ -109,6 +120,10 @@ const tagAliases: Record<ConditionTag, string[]> = {
 
 const macroKeys = ['kcal', 'protein', 'fat', 'carb'] as const;
 
+function hasMacroTarget<K extends MacroKey>(input: MealInput, key: K): input is MealInput & Record<K, number> {
+  return typeof input[key] === 'number' && Number.isFinite(input[key]);
+}
+
 export function createMealCandidates(input: MealInput, foods: Food[], recipes: Recipe[] = initialRecipes): MealCandidate[] {
   const foodMap = new Map(foods.map((food) => [food.id, food]));
   const recipePool = [...recipes, ...createUserFoodRecipes(foods)].filter((recipe) => isUsableRecipe(recipe, foodMap));
@@ -202,9 +217,9 @@ function addOptionalExtra(
   recipes: Recipe[],
 ): MealItem[] {
   const totals = sumMacros(items.map((item) => item.macros));
-  const kcalGap = input.kcal - totals.kcal;
-  const proteinGap = input.protein - totals.protein;
-  const shouldAdd = kcalGap >= 90 || proteinGap >= 15;
+  const kcalGap = hasMacroTarget(input, 'kcal') ? input.kcal - totals.kcal : null;
+  const proteinGap = hasMacroTarget(input, 'protein') ? input.protein - totals.protein : null;
+  const shouldAdd = (kcalGap !== null && kcalGap >= 90) || (proteinGap !== null && proteinGap >= 15);
   if (!shouldAdd) return items;
 
   const optionalCategories: Recipe['category'][] = ['dairy', 'fruit', 'drink', 'snack', 'supplement'];
@@ -215,10 +230,10 @@ function addOptionalExtra(
     .filter((recipe) => !usedIds.has(recipe.id))
     .map((recipe) => buildMealItem(recipe, '追加', foodMap))
     .filter(isMealItem)
-    .filter((item) => item.macros.kcal <= Math.max(180, kcalGap + 60))
+    .filter((item) => kcalGap === null || item.macros.kcal <= Math.max(180, kcalGap + 60))
     .sort((a, b) => {
-      const aProteinFit = Math.abs(proteinGap - a.macros.protein);
-      const bProteinFit = Math.abs(proteinGap - b.macros.protein);
+      const aProteinFit = proteinGap === null ? 0 : Math.abs(proteinGap - a.macros.protein);
+      const bProteinFit = proteinGap === null ? 0 : Math.abs(proteinGap - b.macros.protein);
       return aProteinFit - bProteinFit || a.macros.kcal - b.macros.kcal;
     })[0];
 
@@ -226,6 +241,7 @@ function addOptionalExtra(
 }
 
 function tuneWhiteRiceServing(items: MealItem[], input: MealInput): MealItem[] {
+  if (!hasMacroTarget(input, 'carb')) return items;
   const riceLocation = findRiceIngredient(items);
   if (!riceLocation) return items;
 
@@ -285,11 +301,11 @@ function scoreRecipe(recipe: Recipe, preferTags: string[], avoidTags: string[], 
   return tagScore + directTagScore + preferScore + lowFatBonus + proteinBonus + userFoodBonus + timingBonus + timeBonus - avoidPenalty;
 }
 
-function scoreMeal(template: MealTemplate, items: MealItem[], totals: MacroProfile, diff: MacroProfile, input: MealInput) {
-  const kcalScore = Math.max(0, 220 - Math.abs(diff.kcal) * 0.5);
-  const pScore = Math.max(0, 120 - Math.abs(diff.protein) * 4);
-  const fScore = Math.max(0, 95 - Math.abs(diff.fat) * 5.2);
-  const cScore = Math.max(0, 95 - Math.abs(diff.carb) * 2);
+function scoreMeal(template: MealTemplate, items: MealItem[], totals: MacroProfile, diff: MacroDiffProfile, input: MealInput) {
+  const kcalScore = macroScore(diff, 'kcal', 220, 0.5);
+  const pScore = macroScore(diff, 'protein', 120, 4);
+  const fScore = macroScore(diff, 'fat', 95, 5.2);
+  const cScore = macroScore(diff, 'carb', 95, 2);
   const selectedTags = expandTags(input.tags);
   const tagScore = items.flatMap((item) => item.recipe.tags).filter((tag) => selectedTags.includes(tag)).length * 42;
   const lowFatScore = input.tags.includes('low-fat') ? Math.max(0, 180 - totals.fat * 7) : 0;
@@ -301,6 +317,11 @@ function scoreMeal(template: MealTemplate, items: MealItem[], totals: MacroProfi
   return round1(
     kcalScore + pScore + fScore + cScore + tagScore + lowFatScore + highProteinScore + userFoodScore + structureScore + templateScore,
   );
+}
+
+function macroScore(diff: MacroDiffProfile, key: MacroKey, maxScore: number, penalty: number) {
+  const value = diff[key];
+  return value === null ? 0 : Math.max(0, maxScore - Math.abs(value) * penalty);
 }
 
 function isNaturalMeal(items: MealItem[]) {
@@ -328,7 +349,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput) {
       label: '低脂質案',
       rank: (candidate) =>
         candidate.score +
-        (candidate.totals.fat <= input.fat ? 90 : 0) -
+        (hasMacroTarget(input, 'fat') && candidate.totals.fat <= input.fat ? 90 : 0) -
         candidate.totals.fat * 7 -
         similarityPenalty(candidate, selected),
     },
@@ -378,16 +399,24 @@ function overlap(a: string[], b: string[]) {
   return [...new Set(a)].filter((tag) => bSet.has(tag)).length;
 }
 
-function macroDistance(diff: MacroProfile) {
-  return Math.abs(diff.kcal) + Math.abs(diff.protein) * 18 + Math.abs(diff.fat) * 22 + Math.abs(diff.carb) * 8;
+function macroDistance(diff: MacroDiffProfile) {
+  return macroKeys.reduce((distance, key) => {
+    const value = diff[key];
+    if (value === null) return distance;
+    const weight: Record<MacroKey, number> = { kcal: 1, protein: 18, fat: 22, carb: 8 };
+    return distance + Math.abs(value) * weight[key];
+  }, 0);
 }
 
 function getRoleRecipeName(candidate: MealCandidate, role: string) {
   return candidate.items.find((item) => item.role === role)?.recipe.name ?? '';
 }
 
-function calculateFitScore(diff: MacroProfile) {
-  const distance = Math.abs(diff.kcal) * 0.08 + Math.abs(diff.protein) * 2.5 + Math.abs(diff.fat) * 3 + Math.abs(diff.carb) * 1.4;
+function calculateFitScore(diff: MacroDiffProfile) {
+  const weights: Record<MacroKey, number> = { kcal: 0.08, protein: 2.5, fat: 3, carb: 1.4 };
+  const specifiedKeys = macroKeys.filter((key) => diff[key] !== null);
+  if (specifiedKeys.length === 0) return 50;
+  const distance = specifiedKeys.reduce((sum, key) => sum + Math.abs(diff[key] ?? 0) * weights[key], 0);
   return Math.max(1, Math.min(99, Math.round(100 - distance)));
 }
 
@@ -438,8 +467,14 @@ function sumMacros(macros: MacroProfile[]): MacroProfile {
   );
 }
 
-function diffMacros(totals: MacroProfile, input: MealInput): MacroProfile {
-  return macroKeys.reduce((acc, key) => ({ ...acc, [key]: round1(totals[key] - input[key]) }), {} as MacroProfile);
+function diffMacros(totals: MacroProfile, input: MealInput): MacroDiffProfile {
+  return macroKeys.reduce(
+    (acc, key) => ({
+      ...acc,
+      [key]: hasMacroTarget(input, key) ? round1(totals[key] - input[key]) : null,
+    }),
+    {} as MacroDiffProfile,
+  );
 }
 
 function scaleMacros(food: Food, serving: number): MacroProfile {

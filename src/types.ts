@@ -44,6 +44,9 @@ export interface MacroProfile {
   carb: number;
 }
 
+export type MacroTargetProfile = Record<MacroKey, number | null>;
+export type MacroDiffProfile = Record<MacroKey, number | null>;
+
 export interface Food extends MacroProfile {
   id: string;
   name: string;
@@ -60,7 +63,7 @@ export interface Food extends MacroProfile {
   source: 'initial' | 'user';
 }
 
-export interface MealInput extends MacroProfile {
+export interface MealInput extends MacroTargetProfile {
   tags: ConditionTag[];
 }
 
@@ -103,7 +106,7 @@ export interface MealCandidate {
   title: string;
   items: MealItem[];
   totals: MacroProfile;
-  diff: MacroProfile;
+  diff: MacroDiffProfile;
   score: number;
   fitScore: number;
   reason: string;

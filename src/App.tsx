@@ -112,7 +112,7 @@ export function App() {
 
   function suggestMeals() {
     const safeInput = macroFields.reduce(
-      (acc, field) => ({ ...acc, [field.key]: Number.isFinite(mealInput[field.key]) ? mealInput[field.key] : 0 }),
+      (acc, field) => ({ ...acc, [field.key]: normalizeMacroTarget(mealInput[field.key], null) }),
       { ...mealInput },
     );
     const candidates = createMealCandidates(safeInput, foods);
@@ -337,7 +337,7 @@ export function App() {
                     key={field.key}
                   label={foodMacroLabel(field.key)}
                   value={foodForm[field.key]}
-                  onChange={(value) => setFoodForm({ ...foodForm, [field.key]: parseMacroValue(value) })}
+                  onChange={(value) => setFoodForm({ ...foodForm, [field.key]: parseMacroValue(value) ?? 0 })}
                   onFocus={() => setNumericInputFocused(true)}
                   onBlur={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
                   />
@@ -495,7 +495,7 @@ function MacroInput({
 }: {
   label: string;
   unit?: string;
-  value: number;
+  value: number | null;
   onChange: (value: string) => void;
   onFocus: () => void;
   onBlur: () => void;
@@ -511,8 +511,8 @@ function MacroInput({
         step="0.1"
         value={formatInputValue(value)}
         onFocus={(event) => {
+          event.currentTarget.select();
           onFocus();
-          if (Number(event.currentTarget.value) === 0) onChange('');
         }}
         onBlur={onBlur}
         onChange={(event) => onChange(sanitizeNumericInput(event.target.value))}
@@ -650,14 +650,7 @@ function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
 
       <div className="macro-strip">
         {macroFields.map((field) => (
-          <div key={field.key}>
-            <span>{field.label}</span>
-            <strong>{meal.totals[field.key]}</strong>
-            <small className={meal.diff[field.key] > 0 ? 'plus' : meal.diff[field.key] < 0 ? 'minus' : ''}>
-              {meal.diff[field.key] > 0 ? '+' : ''}
-              {meal.diff[field.key]}
-            </small>
-          </div>
+          <MacroResult key={field.key} field={field} meal={meal} />
         ))}
       </div>
 
@@ -672,6 +665,20 @@ function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
         </p>
       </div>
     </article>
+  );
+}
+
+function MacroResult({ field, meal }: { field: (typeof macroFields)[number]; meal: MealCandidate }) {
+  const diff = meal.diff[field.key];
+  const diffClass = diff === null ? '' : diff > 0 ? 'plus' : diff < 0 ? 'minus' : '';
+  const diffLabel = diff === null ? '-' : `${diff > 0 ? '+' : ''}${diff}`;
+
+  return (
+    <div>
+      <span>{field.label}</span>
+      <strong>{meal.totals[field.key]}</strong>
+      <small className={diffClass}>{diffLabel}</small>
+    </div>
   );
 }
 
@@ -825,13 +832,13 @@ function sanitizeNumericInput(value: string) {
 }
 
 function parseMacroValue(value: string) {
-  if (!value) return 0;
+  if (!value.trim()) return null;
   const parsed = Number(sanitizeNumericInput(value));
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function formatInputValue(value: number) {
-  if (!value) return '';
+function formatInputValue(value: number | null) {
+  if (value === null) return '';
   return String(value).replace(/^0+(?=\d)/, '');
 }
 
@@ -850,10 +857,10 @@ function normalizeMealInput(value: unknown): MealInput {
     : defaultInput.tags;
 
   return {
-    kcal: safeNumber(value.kcal, defaultInput.kcal),
-    protein: safeNumber(value.protein, defaultInput.protein),
-    fat: safeNumber(value.fat, defaultInput.fat),
-    carb: safeNumber(value.carb, defaultInput.carb),
+    kcal: normalizeMacroTarget(value.kcal, defaultInput.kcal),
+    protein: normalizeMacroTarget(value.protein, defaultInput.protein),
+    fat: normalizeMacroTarget(value.fat, defaultInput.fat),
+    carb: normalizeMacroTarget(value.carb, defaultInput.carb),
     tags,
   };
 }
@@ -907,6 +914,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function safeNumber(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : fallback;
+}
+
+function normalizeMacroTarget(value: unknown, fallback: number | null) {
+  if (value === null) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
