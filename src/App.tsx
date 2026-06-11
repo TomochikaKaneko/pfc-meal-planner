@@ -399,7 +399,7 @@ export function App() {
               {filteredFoods.length === 0 ? (
                 <div className="empty-state">
                   <BookOpen size={34} />
-                  <p>該当する食品がありません</p>
+                  <p>見つかりませんでした。表記を変えて検索してください</p>
                 </div>
               ) : foodsByCategoryOrder(filteredFoods).map(({ food, showHeading }) => (
                 <div className="food-row-wrap" key={food.id}>
@@ -713,12 +713,13 @@ function parseFreeCondition(value: string) {
 }
 
 function filterFoods(foods: Food[], query: string, category: FoodCategory | 'all') {
-  const normalizedQuery = normalizeSearchText(query);
+  const queryTerms = parseSearchTerms(query);
   return foods.filter((food) => {
     const categoryMatched = category === 'all' || food.category === category;
     if (!categoryMatched) return false;
-    if (!normalizedQuery) return true;
-    return getFoodSearchText(food).includes(normalizedQuery);
+    if (queryTerms.length === 0) return true;
+    const searchText = getFoodSearchText(food);
+    return queryTerms.every((term) => getExpandedSearchTerms(term).some((expandedTerm) => searchText.includes(expandedTerm)));
   });
 }
 
@@ -731,9 +732,24 @@ function getFoodSearchText(food: Food) {
       food.source === 'user' ? '追加食品 user' : '初期食品 initial',
       ...food.tags,
       ...food.tags.map(tagSearchLabel),
+      ...(foodSearchAliases[food.id] ?? []),
     ].join(' '),
   );
 }
+
+const foodSearchAliases: Record<string, string[]> = {
+  'white-rice': ['ご飯', 'ごはん', '米', 'お米', 'ライス', '白ご飯', '白飯'],
+  'chicken-breast': ['胸肉', 'むね肉', '鶏むね', '鶏胸', '鶏胸肉', 'とりむね', 'とり胸'],
+  sasami: ['ささみ', 'ササミ', '鶏ささみ'],
+  egg: ['玉子', 'たまご', 'タマゴ'],
+  'boiled-egg': ['玉子', 'たまご', 'タマゴ', '茹で卵', 'ゆでたまご'],
+  'silken-tofu': ['豆腐', 'とうふ', '絹ごし豆腐', '絹豆腐'],
+  'firm-tofu': ['豆腐', 'とうふ', '木綿豆腐'],
+  oikos: ['ヨーグルト', 'ようぐると', '高タンパクヨーグルト'],
+  'greek-yogurt': ['ヨーグルト', 'ようぐると', 'グリークヨーグルト'],
+  'fat-free-yogurt': ['ヨーグルト', 'ようぐると', '無脂肪ヨーグルト'],
+  'black-coffee': ['珈琲', 'コーヒー', 'こーひー', 'ブラック珈琲'],
+};
 
 function tagSearchLabel(tag: string) {
   const labels: Record<string, string> = {
@@ -755,8 +771,39 @@ function tagSearchLabel(tag: string) {
   return labels[tag] ?? tag;
 }
 
+function parseSearchTerms(value: string) {
+  return value
+    .split(/[\s、,，\n\r/]+/)
+    .map(normalizeSearchText)
+    .filter(Boolean);
+}
+
+function getExpandedSearchTerms(term: string) {
+  const synonyms: Record<string, string[]> = {
+    ごはん: ['白米', 'ご飯', 'ごはん', '米', 'ライス'],
+    ご飯: ['白米', 'ご飯', 'ごはん', '米', 'ライス'],
+    米: ['白米', 'ご飯', 'ごはん', '米', 'ライス'],
+    らいす: ['白米', 'ご飯', 'ごはん', '米', 'ライス'],
+    むね肉: ['鶏むね肉', '胸肉', 'むね肉', '鶏むね', '鶏胸'],
+    胸肉: ['鶏むね肉', '胸肉', 'むね肉', '鶏むね', '鶏胸'],
+    鶏むね: ['鶏むね肉', '胸肉', 'むね肉', '鶏むね', '鶏胸'],
+    豆腐: ['豆腐', '絹豆腐', '絹ごし豆腐', '木綿豆腐'],
+    とうふ: ['豆腐', '絹豆腐', '絹ごし豆腐', '木綿豆腐'],
+    玉子: ['卵', 'ゆで卵', '玉子', 'たまご'],
+    たまご: ['卵', 'ゆで卵', '玉子', 'たまご'],
+    よーぐると: ['ヨーグルト', 'オイコス', 'ギリシャヨーグルト', '無脂肪ヨーグルト'],
+    珈琲: ['ブラックコーヒー', '珈琲', 'コーヒー'],
+    こーひー: ['ブラックコーヒー', '珈琲', 'コーヒー'],
+  };
+  return [...new Set([term, ...(synonyms[term] ?? [])].map(normalizeSearchText))];
+}
+
 function normalizeSearchText(value: string) {
-  return value.toLowerCase().replace(/\s+/g, '');
+  return value
+    .toLowerCase()
+    .replace(/[ァ-ン]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60))
+    .replace(/[ｰー－]/g, 'ー')
+    .replace(/\s+/g, '');
 }
 
 function foodsByCategoryOrder(foods: Food[]) {
