@@ -115,8 +115,7 @@ export function App() {
       (acc, field) => ({ ...acc, [field.key]: normalizeMacroTarget(mealInput[field.key], null) }),
       { ...mealInput },
     );
-    const candidates = createMealCandidates(safeInput, foods);
-    void freeConditionTerms;
+    const candidates = createMealCandidates(safeInput, foods, undefined, freeConditionTerms);
     setResults(candidates);
     setTab('results');
   }
