@@ -14,8 +14,14 @@
 html,
 body,
 #root {
+  width: 100%;
   min-height: 100%;
   margin: 0;
+  overflow-x: hidden;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
@@ -23,6 +29,8 @@ input,
 select,
 textarea {
   font: inherit;
+  max-width: 100%;
+  font-size: 16px;
 }
 
 button {
@@ -31,9 +39,11 @@ button {
 
 .app-shell {
   width: min(100%, 430px);
+  max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0 auto;
+  overflow-x: hidden;
   background: linear-gradient(180deg, #f8fbf8 0%, #edf5ef 52%, #e4efe8 100%);
   padding: max(16px, env(safe-area-inset-top)) 18px calc(92px + env(safe-area-inset-bottom));
 }
@@ -341,6 +351,7 @@ button {
 
 .free-condition-panel textarea {
   width: 100%;
+  min-width: 0;
   min-height: 96px;
   resize: vertical;
   border: 1px solid rgba(47, 125, 104, 0.18);
@@ -436,11 +447,14 @@ button {
   display: grid;
   align-items: end;
   width: min(100%, 430px);
+  max-width: 100%;
   margin: 0 auto;
+  overflow-x: hidden;
   background: rgba(15, 32, 26, 0.38);
 }
 
 .replan-sheet {
+  min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   max-height: min(86dvh, 760px);
@@ -498,7 +512,7 @@ button {
 
 .keyboard-done-control {
   position: fixed;
-  right: max(18px, calc((100vw - 430px) / 2 + 18px));
+  right: max(18px, calc(50% - 197px));
   bottom: calc(92px + env(safe-area-inset-bottom));
   z-index: 40;
   min-width: 76px;
@@ -695,6 +709,7 @@ button {
 .form-panel select,
 .form-panel textarea {
   width: 100%;
+  min-width: 0;
   min-height: 48px;
   border: 1px solid rgba(47, 125, 104, 0.18);
   border-radius: 8px;
@@ -731,6 +746,7 @@ button {
 
 .food-search-field input {
   width: 100%;
+  min-width: 0;
   min-height: 48px;
   border: 1px solid rgba(47, 125, 104, 0.18);
   border-radius: 8px;
