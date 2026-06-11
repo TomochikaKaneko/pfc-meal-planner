@@ -126,6 +126,8 @@ const tagAliases: Record<ConditionTag, string[]> = {
 };
 
 const macroKeys = ['kcal', 'protein', 'fat', 'carb'] as const;
+const MIN_RECOMMENDED_FIT_SCORE = 30;
+const RECIPE_POOL_SIZES = [16, 16, 16, 5] as const;
 
 function hasMacroTarget<K extends MacroKey>(input: MealInput, key: K): input is MealInput & Record<K, number> {
   return typeof input[key] === 'number' && Number.isFinite(input[key]);
@@ -141,8 +143,12 @@ export function createMealCandidates(
   const intent = buildFreeTextIntent(freeTextTerms);
   const recipePool = [...recipes, ...createUserFoodRecipes(foods)].filter((recipe) => isUsableRecipe(recipe, foodMap));
   const candidates = mealTemplates.flatMap((template) => buildTemplateCandidates(template, input, foodMap, recipePool, intent));
+  const viableCandidates = candidates
+    .filter((candidate) => isNaturalMeal(candidate.items))
+    .filter((candidate) => candidate.fitScore >= MIN_RECOMMENDED_FIT_SCORE)
+    .filter((candidate) => isIntentCompatible(candidate, intent));
 
-  return diversifyCandidates(candidates.filter((candidate) => isNaturalMeal(candidate.items)), input, intent).map((candidate, index) => ({
+  return diversifyCandidates(viableCandidates, input, intent).map((candidate, index) => ({
     ...candidate,
     id: `${candidate.id}-${index}`,
   }));
@@ -155,14 +161,14 @@ function buildTemplateCandidates(
   recipes: Recipe[],
   intent: FreeTextIntent,
 ) {
-  const rolePools = template.roles.map((role) => ({
+  const rolePools = template.roles.map((role, index) => ({
     role,
     recipes: recipes
       .filter((recipe) => role.categories.includes(recipe.category))
       .filter((recipe) => matchesMealTiming(recipe, template))
       .map((recipe) => ({ recipe, score: scoreRecipe(recipe, role.preferTags, role.avoidTags ?? [], input, template, foodMap, intent) }))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
+      .slice(0, RECIPE_POOL_SIZES[index] ?? 8)
       .map(({ recipe }) => recipe),
   }));
 
@@ -181,7 +187,8 @@ function buildTemplateCandidates(
           const tunedItems = tuneWhiteRiceServing(withExtra, input);
           const totals = sumMacros(tunedItems.map((item) => item.macros));
           const diff = diffMacros(totals, input);
-          const score = scoreMeal(template, tunedItems, totals, diff, input, intent);
+          const fitScore = calculateFitScore(diff);
+          const score = scoreMeal(template, tunedItems, totals, diff, input, intent, fitScore);
 
           candidates.push({
             id: `${template.id}-${selected.map((recipe) => recipe.id).join('-')}`,
@@ -192,7 +199,7 @@ function buildTemplateCandidates(
             totals,
             diff,
             score,
-            fitScore: calculateFitScore(diff),
+            fitScore,
             reason: template.reason,
             caution: template.caution,
           });
@@ -336,6 +343,7 @@ function scoreMeal(
   diff: MacroDiffProfile,
   input: MealInput,
   intent: FreeTextIntent,
+  fitScore: number,
 ) {
   const kcalScore = macroScore(diff, 'kcal', 220, 0.5);
   const pScore = macroScore(diff, 'protein', 120, 4);
@@ -348,7 +356,7 @@ function scoreMeal(
   const userFoodScore = items.some((item) => item.recipe.id.startsWith('generated-recipe-')) ? 260 : 0;
   const structureScore = hasRole(items, '主食') && hasRole(items, '主菜') && hasRole(items, '副菜') ? 80 : -120;
   const templateScore = items.some((item) => item.recipe.tags.includes(template.id)) ? 12 : 0;
-  const intentScore = scoreMealIntent(items, totals, intent);
+  const intentScore = scoreMealIntent(items, totals, intent) * getIntentWeight(fitScore);
 
   return round1(
     kcalScore +
@@ -368,6 +376,13 @@ function scoreMeal(
 function macroScore(diff: MacroDiffProfile, key: MacroKey, maxScore: number, penalty: number) {
   const value = diff[key];
   return value === null ? 0 : Math.max(0, maxScore - Math.abs(value) * penalty);
+}
+
+function getIntentWeight(fitScore: number) {
+  if (fitScore < MIN_RECOMMENDED_FIT_SCORE) return 0;
+  if (fitScore < 55) return 0.18;
+  if (fitScore < 75) return 0.3;
+  return 0.42;
 }
 
 const freeTextIntentRules: Array<{
@@ -426,9 +441,62 @@ const freeTextIntentRules: Array<{
   },
 ];
 
+const canonicalFreeTextIntentRules: typeof freeTextIntentRules = [
+  {
+    mood: 'hearty',
+    keywords: ['\u30ac\u30c3\u30c4\u30ea', '\u304c\u3063\u3064\u308a', '\u6e80\u8db3', '\u6e80\u8179', '\u98df\u3079\u5fdc\u3048'],
+    tags: ['satisfying', 'white-rice', 'pasta', 'chicken', 'beef', 'pork', 'fish', 'set-meal'],
+    includeTerms: [
+      '\u4e3c',
+      '\u5b9a\u98df',
+      '\u7092\u3081',
+      '\u713c\u304d',
+      '\u713c\u8089',
+      '\u751f\u59dc\u713c\u304d',
+      '\u7167\u308a\u713c\u304d',
+      '\u30d1\u30b9\u30bf',
+      '\u30d3\u30d3\u30f3\u30d0',
+      '\u30bf\u30c3\u30ab\u30eb\u30d3',
+      '\u4e2d\u83ef\u4e3c',
+      '\u89aa\u5b50\u4e3c',
+    ],
+    penaltyTerms: [
+      '\u51b7\u5974',
+      '\u3086\u3067\u5375',
+      '\u30e8\u30fc\u30b0\u30eb\u30c8',
+      '\u30aa\u30a4\u30b3\u30b9',
+      '\u30d7\u30ed\u30c6\u30a4\u30f3',
+      '\u6e6f\u8c46\u8150',
+      '\u88dc\u52a9',
+      '\u8efd\u3081',
+    ],
+  },
+  {
+    mood: 'pasta',
+    keywords: ['\u30d1\u30b9\u30bf', '\u30b9\u30d1\u30b2\u30c3\u30c6\u30a3', '\u30b9\u30d1\u30b2\u30c6\u30a3', '\u30da\u30da\u30ed\u30f3\u30c1\u30fc\u30ce', '\u30ca\u30dd\u30ea\u30bf\u30f3'],
+    tags: ['pasta', 'western'],
+    includeTerms: ['\u30d1\u30b9\u30bf', '\u30b9\u30d1\u30b2\u30c3\u30c6\u30a3', '\u30da\u30da\u30ed\u30f3\u30c1\u30fc\u30ce', '\u30ca\u30dd\u30ea\u30bf\u30f3', '\u51b7\u88fd', '\u30c8\u30de\u30c8'],
+    penaltyTerms: ['\u7d0d\u8c46\u3054\u98ef', '\u5375\u304b\u3051', '\u767d\u7c73', '\u4e3c', '\u305d\u3070', '\u3046\u3069\u3093'],
+  },
+  {
+    mood: 'korean',
+    keywords: ['\u97d3\u56fd', '\u97d3\u56fd\u6599\u7406', '\u30ad\u30e0\u30c1', '\u30c1\u30b2', '\u30b9\u30f3\u30c9\u30a5\u30d6', '\u30d3\u30d3\u30f3\u30d0', '\u30bf\u30c3\u30ab\u30eb\u30d3', '\u30e6\u30c3\u30b1\u30b8\u30e3\u30f3', '\u30d7\u30eb\u30b3\u30ae'],
+    tags: ['korean', 'kimchi'],
+    includeTerms: ['\u30ad\u30e0\u30c1', '\u30bf\u30c3\u30ab\u30eb\u30d3', '\u30d3\u30d3\u30f3\u30d0', '\u30e6\u30c3\u30b1\u30b8\u30e3\u30f3', '\u30b9\u30f3\u30c9\u30a5\u30d6', '\u30c1\u30b2', '\u30d7\u30eb\u30b3\u30ae', '\u30ca\u30e0\u30eb'],
+    penaltyTerms: ['\u7d0d\u8c46\u3054\u98ef', '\u5375\u304b\u3051', '\u30e8\u30fc\u30b0\u30eb\u30c8'],
+  },
+  {
+    mood: 'chinese',
+    keywords: ['\u4e2d\u83ef', '\u9ebb\u5a46', '\u56de\u934b\u8089', '\u9752\u6912\u8089\u7d72', '\u5929\u6d25\u98ef', '\u4e2d\u83ef\u4e3c', '\u516b\u5b9d\u83dc', '\u51b7\u3084\u3057\u4e2d\u83ef'],
+    tags: ['chinese'],
+    includeTerms: ['\u9ebb\u5a46', '\u56de\u934b\u8089', '\u9752\u6912\u8089\u7d72', '\u5929\u6d25\u98ef', '\u4e2d\u83ef\u4e3c', '\u516b\u5b9d\u83dc', '\u51b7\u3084\u3057\u4e2d\u83ef', '\u4e2d\u83ef\u9eba'],
+    penaltyTerms: ['\u7d0d\u8c46\u3054\u98ef', '\u30e8\u30fc\u30b0\u30eb\u30c8', '\u30aa\u30a4\u30b3\u30b9'],
+  },
+];
+
 function buildFreeTextIntent(terms: string[]): FreeTextIntent {
   const normalizedTerms = terms.map(normalizeIntentText).filter(Boolean);
-  const matchedRules = freeTextIntentRules.filter((rule) =>
+  const matchedRules = [...freeTextIntentRules, ...canonicalFreeTextIntentRules].filter((rule) =>
     normalizedTerms.some((term) => rule.keywords.map(normalizeIntentText).some((keyword) => term.includes(keyword) || keyword.includes(term))),
   );
 
@@ -466,7 +534,7 @@ function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTe
       (items.some((item) => item.role === '主菜' && item.recipe.tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood'].includes(tag)))
         ? 120
         : -240) +
-      Math.min(160, totals.kcal * 0.18) +
+      heartyMealShapeScore(items) +
       (tags.includes('satisfying') ? 120 : 0)
     : 0;
   const pastaGate = intent.moods.includes('pasta') && !tags.includes('pasta') ? -900 : 0;
@@ -513,8 +581,24 @@ function isNaturalMeal(items: MealItem[]) {
   return true;
 }
 
+function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
+  const tags = candidate.items.flatMap((item) => item.recipe.tags);
+  const searchText = candidateSearchText(candidate);
+  if (intent.moods.includes('pasta') && !tags.includes('pasta')) return false;
+  if (intent.moods.includes('korean') && !tags.includes('korean') && !tags.includes('kimchi')) return false;
+  if (intent.moods.includes('chinese') && !tags.includes('chinese')) return false;
+  if (intent.moods.includes('hearty')) {
+    const hasPenaltyTerm = intent.penaltyTerms.some((term) => searchText.includes(term));
+    const hasFillingMain = candidate.items.some(
+      (item) => item.role === '主菜' && item.recipe.tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood'].includes(tag)),
+    );
+    if (hasPenaltyTerm || !hasRole(candidate.items, '主食') || !hasFillingMain) return false;
+  }
+  return true;
+}
+
 function diversifyCandidates(candidates: MealCandidate[], input: MealInput, intent: FreeTextIntent) {
-  const pool = candidates.sort((a, b) => b.score - a.score);
+  const pool = candidates.sort((a, b) => macroFitRank(b) - macroFitRank(a));
   const selected: MealCandidate[] = [];
   const strategies: Array<{
     label: string;
@@ -522,13 +606,13 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
   }> = [
     {
       label: '高タンパク案',
-      rank: (candidate) => candidate.score + candidateIntentRank(candidate, intent) - similarityPenalty(candidate, selected) - macroDistance(candidate.diff) * 0.3,
+      rank: (candidate) => macroFitRank(candidate) + candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) - similarityPenalty(candidate, selected),
     },
     {
       label: '低脂質案',
       rank: (candidate) =>
-        candidate.score +
-        candidateIntentRank(candidate, intent) +
+        macroFitRank(candidate) +
+        candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         (hasMacroTarget(input, 'fat') && candidate.totals.fat <= input.fat ? 90 : 0) -
         candidate.totals.fat * 7 -
         similarityPenalty(candidate, selected),
@@ -536,11 +620,10 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
     {
       label: '満足感重視案',
       rank: (candidate) =>
-        candidate.score +
-        candidateIntentRank(candidate, intent) +
-        candidate.totals.kcal * 0.18 +
-        candidate.totals.carb * 1.2 +
-        candidate.items.length * 18 -
+        macroFitRank(candidate) +
+        candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
+        heartyMealShapeScore(candidate.items) +
+        candidate.items.length * 12 -
         similarityPenalty(candidate, selected),
     },
   ];
@@ -565,14 +648,43 @@ function similarityPenalty(candidate: MealCandidate, selected: MealCandidate[]) 
   }, 0);
 }
 
-function candidateIntentRank(candidate: MealCandidate, intent: FreeTextIntent) {
-  if (intent.includeTerms.length === 0 && intent.tags.length === 0) return 0;
-  const tags = candidate.items.flatMap((item) => item.recipe.tags);
-  const searchText = normalizeIntentText(
+function macroFitRank(candidate: MealCandidate) {
+  return candidate.score + candidate.fitScore * 22 - macroDistance(candidate.diff) * 0.35;
+}
+
+function heartyMealShapeScore(items: MealItem[]) {
+  const tags = items.flatMap((item) => item.recipe.tags);
+  const names = normalizeIntentText(items.map((item) => item.recipe.name).join(' '));
+  const hasStaple = hasRole(items, '主食');
+  const hasMain = hasRole(items, '主菜');
+  const hasFillingMain = items.some(
+    (item) => item.role === '主菜' && item.recipe.tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood'].includes(tag)),
+  );
+  const heartyName = ['丼', '定食', '炒め', '焼き', 'パスタ', 'ビビンバ', 'タッカルビ', '中華丼', '親子丼'].some((term) =>
+    names.includes(normalizeIntentText(term)),
+  );
+
+  return (
+    (hasStaple ? 70 : -180) +
+    (hasMain ? 70 : -180) +
+    (hasFillingMain ? 80 : -120) +
+    (heartyName ? 80 : 0) +
+    (tags.includes('satisfying') ? 80 : 0)
+  );
+}
+
+function candidateSearchText(candidate: MealCandidate) {
+  return normalizeIntentText(
     candidate.items
       .flatMap((item) => [item.recipe.name, item.recipe.category, ...item.recipe.tags, ...item.ingredients.map((ingredient) => ingredient.food.name)])
       .join(' '),
   );
+}
+
+function candidateIntentRank(candidate: MealCandidate, intent: FreeTextIntent) {
+  if (intent.includeTerms.length === 0 && intent.tags.length === 0) return 0;
+  const tags = candidate.items.flatMap((item) => item.recipe.tags);
+  const searchText = candidateSearchText(candidate);
   const tagScore = intent.tags.filter((tag) => tags.includes(tag)).length * 70;
   const includeScore = intent.includeTerms.filter((term) => searchText.includes(term)).length * 35;
   const penalty = intent.penaltyTerms.filter((term) => searchText.includes(term)).length * 220;
