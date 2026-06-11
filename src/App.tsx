@@ -63,6 +63,8 @@ export function App() {
   const [mealInput, setMealInput] = useState<MealInput>(() => loadMealInput());
   const [freeCondition, setFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
+  const [foodSearch, setFoodSearch] = useState('');
+  const [foodCategoryFilter, setFoodCategoryFilter] = useState<FoodCategory | 'all'>('all');
   const [results, setResults] = useState<MealCandidate[]>([]);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
   const [updateReady, setUpdateReady] = useState(false);
@@ -70,6 +72,7 @@ export function App() {
   const [numericInputFocused, setNumericInputFocused] = useState(false);
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
+  const filteredFoods = useMemo(() => filterFoods(foods, foodSearch, foodCategoryFilter), [foods, foodSearch, foodCategoryFilter]);
   const freeConditionTerms = useMemo(() => parseFreeCondition(freeCondition), [freeCondition]);
 
   useEffect(() => {
@@ -361,10 +364,44 @@ export function App() {
           <section className="stack">
             <div className="section-title">
               <h2>食品一覧</h2>
-              <span>{foods.length}件</span>
+              <span>{foodCategoryFilter === 'all' ? 'すべて' : categoryLabel(foodCategoryFilter)} {filteredFoods.length}件</span>
             </div>
+            <section className="panel food-filter-panel">
+              <label className="food-search-field">
+                食品を検索
+                <input
+                  value={foodSearch}
+                  onChange={(event) => setFoodSearch(event.target.value)}
+                  placeholder="鶏 / キムチ / 高タンパク / 主菜"
+                />
+              </label>
+              <div className="category-chip-row" aria-label="食品カテゴリで絞り込み">
+                <button
+                  type="button"
+                  className={foodCategoryFilter === 'all' ? 'category-chip selected' : 'category-chip'}
+                  onClick={() => setFoodCategoryFilter('all')}
+                >
+                  すべて
+                </button>
+                {categoryOptions.map((option) => (
+                  <button
+                    type="button"
+                    className={foodCategoryFilter === option.value ? 'category-chip selected' : 'category-chip'}
+                    key={option.value}
+                    onClick={() => setFoodCategoryFilter(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </section>
             <div className="food-list grouped">
-              {foodsByCategoryOrder(foods).map(({ food, showHeading }) => (
+              {filteredFoods.length === 0 ? (
+                <div className="empty-state">
+                  <BookOpen size={34} />
+                  <p>該当する食品がありません</p>
+                </div>
+              ) : foodsByCategoryOrder(filteredFoods).map(({ food, showHeading }) => (
                 <div className="food-row-wrap" key={food.id}>
                   {showHeading && <h3 className="food-category-heading">{categoryLabel(food.category)}</h3>}
                 <article className="food-row">
@@ -673,6 +710,53 @@ function parseFreeCondition(value: string) {
     .split(/[\s、,，\n\r]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function filterFoods(foods: Food[], query: string, category: FoodCategory | 'all') {
+  const normalizedQuery = normalizeSearchText(query);
+  return foods.filter((food) => {
+    const categoryMatched = category === 'all' || food.category === category;
+    if (!categoryMatched) return false;
+    if (!normalizedQuery) return true;
+    return getFoodSearchText(food).includes(normalizedQuery);
+  });
+}
+
+function getFoodSearchText(food: Food) {
+  return normalizeSearchText(
+    [
+      food.name,
+      food.category,
+      categoryLabel(food.category),
+      food.source === 'user' ? '追加食品 user' : '初期食品 initial',
+      ...food.tags,
+      ...food.tags.map(tagSearchLabel),
+    ].join(' '),
+  );
+}
+
+function tagSearchLabel(tag: string) {
+  const labels: Record<string, string> = {
+    'high-protein': '高タンパク たんぱく タンパク',
+    'low-fat': '低脂質 脂質控えめ',
+    fish: '魚 魚介',
+    chicken: '鶏肉 鶏',
+    tofu: '豆腐',
+    natto: '納豆',
+    kimchi: 'キムチ',
+    dairy: '乳製品 ヨーグルト',
+    fruit: '果物',
+    drink: '飲料',
+    seasoning: '調味料',
+    vegetable: '野菜',
+    japanese: '和食',
+    convenience: 'コンビニ',
+  };
+  return labels[tag] ?? tag;
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, '');
 }
 
 function foodsByCategoryOrder(foods: Food[]) {

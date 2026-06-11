@@ -580,6 +580,62 @@ button {
   gap: 10px;
 }
 
+.food-filter-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.food-search-field {
+  display: grid;
+  gap: 8px;
+  color: #425f54;
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.food-search-field input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(47, 125, 104, 0.18);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #17211e;
+  background: #f8fbf8;
+  outline-color: #2f7d68;
+}
+
+.category-chip-row {
+  display: flex;
+  gap: 8px;
+  margin: 0 -16px;
+  overflow-x: auto;
+  padding: 0 16px 2px;
+  scrollbar-width: none;
+}
+
+.category-chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.category-chip {
+  flex: 0 0 auto;
+  min-height: 38px;
+  border: 1px solid rgba(47, 125, 104, 0.2);
+  border-radius: 999px;
+  padding: 0 13px;
+  color: #315346;
+  background: #f5faf6;
+  font-size: 0.82rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.category-chip.selected {
+  border-color: #2f7d68;
+  color: #ffffff;
+  background: #2f7d68;
+}
+
 .food-list.grouped {
   gap: 16px;
 }
