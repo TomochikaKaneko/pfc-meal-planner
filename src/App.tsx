@@ -268,7 +268,7 @@ export function App() {
             <div className="panel hero-panel">
               <div>
                 <p className="eyebrow">meal target</p>
-                <h2>この食事で摂りたいPFCに合う献立を提案</h2>
+                <h2>PFC献立提案</h2>
               </div>
               <Sparkles size={26} />
             </div>
@@ -595,24 +595,26 @@ function MacroInput({
   return (
     <label className="macro-card">
       <span>{label}</span>
-      <input
-        inputMode="decimal"
-        enterKeyHint="done"
-        type="number"
-        min="0"
-        step="0.1"
-        value={formatInputValue(value)}
-        onFocus={(event) => {
-          event.currentTarget.select();
-          onFocus();
-        }}
-        onBlur={onBlur}
-        onChange={(event) => onChange(sanitizeNumericInput(event.target.value))}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') event.currentTarget.blur();
-        }}
-      />
-      {unit && <small>{unit}</small>}
+      <div className="macro-value-row">
+        <input
+          inputMode="decimal"
+          enterKeyHint="done"
+          type="number"
+          min="0"
+          step="0.1"
+          value={formatInputValue(value)}
+          onFocus={(event) => {
+            event.currentTarget.select();
+            onFocus();
+          }}
+          onBlur={onBlur}
+          onChange={(event) => onChange(sanitizeNumericInput(event.target.value))}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+        />
+        {unit && <small>{unit}</small>}
+      </div>
     </label>
   );
 }
@@ -819,8 +821,8 @@ function FreeConditionField({ embedded = false, value, onChange }: { embedded?: 
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={'例: 胸肉 ご飯 キムチ\n魚 さっぱり\n納豆 卵\nガッツリ 韓国料理'}
-          rows={4}
+          placeholder="例：胸肉 ご飯 キムチ ガッツリ 韓国料理"
+          rows={2}
         />
       </label>
   );
