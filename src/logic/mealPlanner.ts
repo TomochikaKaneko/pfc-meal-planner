@@ -227,12 +227,12 @@ function buildMealItem(recipe: Recipe, role: string, foodMap: Map<string, Food>)
     });
   }
 
-  return {
+  return syncStapleRecipeName({
     recipe,
     role,
     ingredients,
     macros: sumMacros(ingredients.map((ingredient) => ingredient.macros)),
-  };
+  });
 }
 
 function addOptionalExtra(
@@ -296,8 +296,39 @@ function tuneWhiteRiceServing(items: MealItem[], input: MealInput): MealItem[] {
     const ingredients = item.ingredients.map((ingredient, ingredientIndex) =>
       ingredientIndex === riceLocation.ingredientIndex ? tunedRice : ingredient,
     );
-    return { ...item, ingredients, macros: sumMacros(ingredients.map((ingredient) => ingredient.macros)) };
+    return syncStapleRecipeName({ ...item, ingredients, macros: sumMacros(ingredients.map((ingredient) => ingredient.macros)) });
   });
+}
+
+function syncStapleRecipeName(item: MealItem): MealItem {
+  if (item.recipe.category !== 'staple') return item;
+  const rice = item.ingredients.find((ingredient) => ingredient.food.id === 'white-rice');
+  if (!rice) return item;
+
+  const barley = item.ingredients.find((ingredient) => ingredient.food.id === 'barley');
+  const name = buildStapleRecipeName(item.recipe.name, rice, barley);
+  if (name === item.recipe.name) return item;
+  return { ...item, recipe: { ...item.recipe, name } };
+}
+
+function buildStapleRecipeName(recipeName: string, rice: MealIngredient, barley?: MealIngredient) {
+  const baseName = stripStapleAmount(recipeName);
+  if (barley) {
+    const totalServing = round1(rice.serving + barley.serving);
+    const totalAmount = formatServing(totalServing, rice.food.servingUnit);
+    if (baseName.includes('スーパー大麦')) return `スーパー大麦入りご飯${totalAmount}`;
+    return `${baseName}（白米${rice.amount}+スーパー大麦${barley.amount}）`;
+  }
+
+  if (baseName.startsWith('白米')) return `白米${rice.amount}`;
+  if (baseName.includes('ご飯') || baseName.includes('丼')) return `${baseName}（白米${rice.amount}）`;
+  return baseName;
+}
+
+function stripStapleAmount(recipeName: string) {
+  return recipeName
+    .replace(/（白米\d+(?:\.\d+)?g(?:\+スーパー大麦\d+(?:\.\d+)?g)?）$/, '')
+    .replace(/\d+(?:\.\d+)?g$/, '');
 }
 
 function matchesMealTiming(recipe: Recipe, template: MealTemplate) {
