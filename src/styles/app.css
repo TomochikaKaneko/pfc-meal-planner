@@ -403,6 +403,42 @@ button {
   box-shadow: 0 10px 20px rgba(240, 122, 79, 0.18);
 }
 
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.72s linear infinite;
+}
+
+.planning-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 40px;
+  border: 1px solid rgba(47, 125, 104, 0.12);
+  border-radius: 8px;
+  color: #2f7d68;
+  background: rgba(229, 241, 235, 0.72);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.planning-status.inline {
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  font-size: 0.76rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .results-screen {
   padding-bottom: 4px;
 }
@@ -412,7 +448,7 @@ button {
 }
 
 .result-bottom-spacer {
-  height: 128px;
+  height: 92px;
 }
 
 .result-replan-bar {
@@ -423,14 +459,18 @@ button {
   z-index: 16;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 7px;
   width: min(100%, 430px);
   margin: 0 auto;
-  padding: 10px 14px;
+  padding: 8px 14px;
   border-top: 1px solid rgba(47, 125, 104, 0.12);
   background: rgba(248, 251, 248, 0.96);
   box-shadow: 0 -14px 28px rgba(35, 65, 54, 0.12);
   backdrop-filter: blur(16px);
+}
+
+.result-replan-bar.ready {
+  padding-top: 10px;
 }
 
 .saved-condition-note {

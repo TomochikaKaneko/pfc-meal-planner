@@ -74,6 +74,8 @@ export function App() {
   const [draftMealInput, setDraftMealInput] = useState<MealInput>(() => loadMealInput());
   const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
   const [hasSavedReplanCondition, setHasSavedReplanCondition] = useState(false);
+  const [planningSource, setPlanningSource] = useState<'home' | 'replan' | null>(null);
+  const isPlanning = planningSource !== null;
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
   const filteredFoods = useMemo(() => filterFoods(foods, foodSearch, foodCategoryFilter), [foods, foodSearch, foodCategoryFilter]);
@@ -114,7 +116,19 @@ export function App() {
   }
 
   function suggestMeals() {
-    generateMeals(mealInput, freeCondition);
+    startMealGeneration(mealInput, freeCondition, 'home');
+  }
+
+  function startMealGeneration(input: MealInput, condition: string, source: 'home' | 'replan') {
+    if (isPlanning) return;
+    setPlanningSource(source);
+    window.setTimeout(() => {
+      try {
+        generateMeals(input, condition);
+      } finally {
+        setPlanningSource(null);
+      }
+    }, 80);
   }
 
   function generateMeals(input: MealInput, condition: string) {
@@ -155,9 +169,8 @@ export function App() {
   }
 
   function executeSavedReplan() {
-    if (!hasSavedReplanCondition) return;
-    generateMeals(mealInput, freeCondition);
-    setHasSavedReplanCondition(false);
+    if (!hasSavedReplanCondition || isPlanning) return;
+    startMealGeneration(mealInput, freeCondition, 'replan');
   }
 
   function saveFood(event: FormEvent<HTMLFormElement>) {
@@ -294,10 +307,11 @@ export function App() {
 
             <FreeConditionField value={freeCondition} onChange={updateFreeCondition} />
 
-            <button className="primary-action" type="button" onClick={suggestMeals}>
+            <button className="primary-action" type="button" onClick={suggestMeals} disabled={isPlanning}>
               <Sparkles size={20} />
               献立を提案する
             </button>
+            {planningSource === 'home' && <PlanningStatus />}
           </section>
         )}
 
@@ -310,7 +324,7 @@ export function App() {
               </button>
             </div>
 
-            <button className="primary-action" type="button" onClick={suggestMeals}>
+            <button className="primary-action" type="button" onClick={suggestMeals} disabled={isPlanning}>
               <RefreshCw size={20} />
               再提案
             </button>
@@ -503,17 +517,23 @@ export function App() {
       </main>
 
       {tab === 'results' && (
-        <div className="result-replan-bar">
-          {hasSavedReplanCondition && <span className="saved-condition-note">条件を保存しました</span>}
-          <button className="secondary-action" type="button" onClick={openReplanModal}>
+        <div className={hasSavedReplanCondition ? 'result-replan-bar ready' : 'result-replan-bar'}>
+          <button className="secondary-action" type="button" onClick={openReplanModal} disabled={isPlanning}>
             条件を変更して再提案
           </button>
-          <button className="primary-action compact-action" type="button" disabled={!hasSavedReplanCondition} onClick={executeSavedReplan}>
-            <RefreshCw size={18} />
-            再提案を実行
-          </button>
+          {hasSavedReplanCondition && (
+            <>
+              <span className="saved-condition-note">条件変更済み</span>
+              <button className="primary-action compact-action" type="button" disabled={isPlanning} onClick={executeSavedReplan}>
+                {planningSource === 'replan' ? <LoadingSpinner /> : <RefreshCw size={18} />}
+                {planningSource === 'replan' ? '献立を考えています...' : '再提案を実行'}
+              </button>
+              {planningSource === 'replan' && <PlanningStatus inline />}
+            </>
+          )}
         </div>
       )}
+
 
       {isReplanModalOpen && (
         <ReplanConditionModal
@@ -595,6 +615,19 @@ function KeyboardDoneControl() {
       ✓ 完了
     </button>
   );
+}
+
+function PlanningStatus({ inline = false }: { inline?: boolean }) {
+  return (
+    <div className={inline ? 'planning-status inline' : 'planning-status'} role="status" aria-live="polite">
+      <LoadingSpinner />
+      <span>条件に合う候補を探しています...</span>
+    </div>
+  );
+}
+
+function LoadingSpinner() {
+  return <span className="loading-spinner" aria-hidden="true" />;
 }
 
 function ReplanConditionModal({
