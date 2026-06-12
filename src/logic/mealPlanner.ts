@@ -525,10 +525,153 @@ const canonicalFreeTextIntentRules: typeof freeTextIntentRules = [
   },
 ];
 
+const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
+  {
+    mood: 'ramen',
+    keywords: ['ラーメン', 'らーめん', '中華そば', '中華麺'],
+    tags: ['noodle', 'chinese'],
+    includeTerms: ['ラーメン', '中華そば', '中華麺', '中華麺セット', '冷やし中華'],
+    penaltyTerms: ['納豆ご飯', '白米', '冷奴', 'ヨーグルト', 'オイコス'],
+  },
+  {
+    mood: 'udon',
+    keywords: ['うどん', '饂飩', '冷やしうどん', '肉うどん', '釜玉うどん'],
+    tags: ['noodle', 'japanese'],
+    includeTerms: ['うどん', '肉うどん', '釜玉うどん', '冷やしうどん'],
+    penaltyTerms: ['納豆ご飯', 'パスタ', '白米', '冷奴'],
+  },
+  {
+    mood: 'soba',
+    keywords: ['そば', '蕎麦', 'ざるそば', '温そば'],
+    tags: ['noodle', 'japanese'],
+    includeTerms: ['そば', 'ざるそば', '温そば'],
+    penaltyTerms: ['納豆ご飯', 'パスタ', '白米', '冷奴'],
+  },
+  {
+    mood: 'somen',
+    keywords: ['素麺', 'そうめん', 'そーめん'],
+    tags: ['noodle', 'japanese'],
+    includeTerms: ['素麺', 'そうめん'],
+    penaltyTerms: ['納豆ご飯', 'パスタ', '白米', '冷奴'],
+  },
+  {
+    mood: 'hiyashi-chuka',
+    keywords: ['冷やし中華'],
+    tags: ['noodle', 'chinese'],
+    includeTerms: ['冷やし中華', '中華麺'],
+    penaltyTerms: ['納豆ご飯', '白米', '冷奴'],
+  },
+  {
+    mood: 'rice-bowl',
+    keywords: ['丼', 'どんぶり', '親子丼', '牛丼', '焼肉丼', 'ビビンバ', '炒飯', 'チャーハン', '雑炊', 'お茶漬け', 'ご飯', 'ごはん'],
+    tags: ['white-rice', 'rice', 'satisfying', 'japanese', 'korean', 'chinese'],
+    includeTerms: ['丼', '親子丼', '焼肉丼', 'ビビンバ', '炒飯', 'チャーハン', '雑炊', 'お茶漬け', 'ご飯', '白米'],
+    penaltyTerms: ['パスタ', 'そば', 'うどん', '素麺', 'ヨーグルト', 'オイコス'],
+  },
+  {
+    mood: 'japanese',
+    keywords: ['和食', '定食', '味噌汁', 'みそ汁', '焼き魚', '煮物'],
+    tags: ['japanese', 'set-meal', 'fish', 'soup'],
+    includeTerms: ['和食', '定食', '味噌汁', 'みそ汁', '焼き魚', '煮物', '鮭', 'サバ', '白米'],
+    penaltyTerms: ['パスタ', 'ヨーグルト', 'オイコス'],
+  },
+  {
+    mood: 'western',
+    keywords: ['洋食', 'イタリアン'],
+    tags: ['western', 'pasta'],
+    includeTerms: ['洋食', 'イタリアン', 'パスタ', 'ペペロンチーノ', 'ナポリタン', 'グラタン', 'ハンバーグ'],
+    penaltyTerms: ['納豆ご飯', '味噌汁'],
+  },
+  {
+    mood: 'curry',
+    keywords: ['カレー', 'カレー風味'],
+    tags: ['satisfying', 'chicken', 'beef', 'pork'],
+    includeTerms: ['カレー'],
+    penaltyTerms: ['納豆ご飯', '冷奴', 'ヨーグルト', 'オイコス', 'プロテイン'],
+  },
+  {
+    mood: 'yakiniku',
+    keywords: ['焼肉', '焼き肉', '焼肉丼'],
+    tags: ['beef', 'pork', 'satisfying', 'white-rice'],
+    includeTerms: ['焼肉', '焼き肉', '焼肉丼', '焼肉のたれ', '牛赤身', '豚ヒレ'],
+    penaltyTerms: ['冷奴', '湯豆腐', 'ヨーグルト', 'オイコス', 'プロテイン'],
+  },
+  {
+    mood: 'sushi',
+    keywords: ['寿司', 'すし', '鮨'],
+    tags: ['fish', 'japanese'],
+    includeTerms: ['寿司', 'すし', '鮨'],
+    penaltyTerms: ['納豆ご飯', '白米', '定食', '味噌汁', '冷奴'],
+  },
+  {
+    mood: 'hotpot',
+    keywords: ['鍋', 'なべ', 'チゲ', 'スンドゥブ'],
+    tags: ['soup', 'tofu', 'pork', 'korean', 'kimchi'],
+    includeTerms: ['鍋', 'チゲ', 'スンドゥブ', '湯豆腐', '豚汁', 'スープ'],
+    penaltyTerms: ['パスタ', 'ヨーグルト', 'オイコス'],
+  },
+  {
+    mood: 'soup',
+    keywords: ['スープ', '汁物', '味噌汁', 'みそ汁', '豚汁'],
+    tags: ['soup', 'japanese', 'chinese', 'korean'],
+    includeTerms: ['スープ', '汁物', '味噌汁', 'みそ汁', '豚汁', 'ユッケジャン', 'スンドゥブ'],
+    penaltyTerms: ['ヨーグルト', 'オイコス', 'プロテイン'],
+  },
+  {
+    mood: 'light',
+    keywords: ['さっぱり', 'あっさり', '軽め', '軽い', '冷たい'],
+    tags: ['low-fat', 'fish', 'tofu', 'mekabu', 'japanese'],
+    includeTerms: ['ポン酢', 'めかぶ', '豆腐', '冷製', '酢の物', 'タラ', 'カツオ', 'きゅうり', 'わかめ'],
+    penaltyTerms: ['焼肉', 'こってり', 'グラタン', 'マヨ', '揚げ'],
+  },
+  {
+    mood: 'stir-fry',
+    keywords: ['炒め物', '炒め', '炒飯', 'チャーハン'],
+    tags: ['satisfying', 'chinese', 'korean', 'vegetable'],
+    includeTerms: ['炒め', '炒飯', 'チャーハン', '回鍋肉', '青椒肉絲', 'タッカルビ', '豚キムチ'],
+    penaltyTerms: ['冷奴', 'ヨーグルト', 'オイコス'],
+  },
+  {
+    mood: 'spicy',
+    keywords: ['辛い', 'ピリ辛', '激辛'],
+    tags: ['kimchi', 'korean', 'chinese'],
+    includeTerms: ['キムチ', 'チゲ', 'スンドゥブ', 'ユッケジャン', 'タッカルビ', '麻婆', '七味'],
+    penaltyTerms: ['ヨーグルト', 'オイコス', '冷奴'],
+  },
+  {
+    mood: 'warm',
+    keywords: ['温かい', 'あったかい', '温まる', 'ホット'],
+    tags: ['soup', 'japanese', 'chinese', 'korean'],
+    includeTerms: ['温そば', 'うどん', 'スープ', '味噌汁', '豚汁', 'チゲ', 'スンドゥブ'],
+    penaltyTerms: ['冷製', '冷やし', 'ざるそば', 'ヨーグルト'],
+  },
+  {
+    mood: 'quick',
+    keywords: ['時短', '簡単', 'すぐ', 'コンビニ'],
+    tags: ['convenience'],
+    includeTerms: ['コンビニ', 'ツナ', 'サラダチキン', 'サバ缶', 'ゆで卵', 'プロテイン'],
+    penaltyTerms: [],
+  },
+  {
+    mood: 'chicken',
+    keywords: ['胸肉', 'むね肉', '鶏むね', '鶏肉', 'ささみ', '鶏もも'],
+    tags: ['chicken', 'high-protein'],
+    includeTerms: ['鶏むね', '胸肉', 'むね肉', 'ささみ', '鶏もも', 'サラダチキン', '親子丼', 'タッカルビ'],
+  },
+  {
+    mood: 'fish',
+    keywords: ['魚', '鮭', 'サバ', '鯖', 'タラ', 'カツオ', 'マグロ', 'ツナ', '焼き魚'],
+    tags: ['fish', 'seafood', 'japanese'],
+    includeTerms: ['魚', '鮭', 'サバ', '鯖', 'タラ', 'カツオ', 'マグロ', 'ツナ', '焼き魚'],
+  },
+];
+
 function buildFreeTextIntent(terms: string[]): FreeTextIntent {
   const normalizedTerms = terms.map(normalizeIntentText).filter(Boolean);
-  const matchedRules = [...freeTextIntentRules, ...canonicalFreeTextIntentRules].filter((rule) =>
-    normalizedTerms.some((term) => rule.keywords.map(normalizeIntentText).some((keyword) => term.includes(keyword) || keyword.includes(term))),
+  const matchedRules = [...freeTextIntentRules, ...canonicalFreeTextIntentRules, ...expandedFreeTextIntentRules].filter((rule) =>
+    normalizedTerms.some((term) =>
+      rule.keywords.map(normalizeIntentText).some((keyword) => term.includes(keyword) || (term.length >= 3 && keyword.includes(term))),
+    ),
   );
 
   return {
@@ -615,9 +758,27 @@ function isNaturalMeal(items: MealItem[]) {
 function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
   const tags = candidate.items.flatMap((item) => item.recipe.tags);
   const searchText = candidateSearchText(candidate);
-  if (intent.moods.includes('pasta') && !tags.includes('pasta')) return false;
-  if (intent.moods.includes('korean') && !tags.includes('korean') && !tags.includes('kimchi')) return false;
-  if (intent.moods.includes('chinese') && !tags.includes('chinese')) return false;
+  const strictMoods = [
+    'pasta',
+    'ramen',
+    'udon',
+    'soba',
+    'somen',
+    'hiyashi-chuka',
+    'korean',
+    'chinese',
+    'rice-bowl',
+    'western',
+    'curry',
+    'yakiniku',
+    'sushi',
+    'hotpot',
+    'stir-fry',
+    'spicy',
+    'chicken',
+    'fish',
+  ];
+  if (strictMoods.some((mood) => intent.moods.includes(mood) && !candidateMatchesMood(candidate, tags, searchText, mood))) return false;
   if (intent.moods.includes('hearty')) {
     const hasPenaltyTerm = intent.penaltyTerms.some((term) => searchText.includes(term));
     const hasFillingMain = candidate.items.some(
@@ -626,6 +787,64 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     if (hasPenaltyTerm || !hasRole(candidate.items, '主食') || !hasFillingMain) return false;
   }
   return true;
+}
+
+function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchText: string, mood: string) {
+  const primaryItems = candidate.items.filter((item) => item.role === '主食' || item.role === '主菜');
+  const primaryTags = primaryItems.flatMap((item) => item.recipe.tags);
+  const primarySearchText = normalizeIntentText(
+    primaryItems
+      .flatMap((item) => [item.recipe.name, item.recipe.category, ...item.recipe.tags, ...item.ingredients.map((ingredient) => ingredient.food.name)])
+      .join(' '),
+  );
+  const primaryRecipeSearchText = normalizeIntentText(
+    primaryItems.flatMap((item) => [item.recipe.name, item.recipe.description, ...item.recipe.tags]).join(' '),
+  );
+  const hasTag = (values: string[]) => values.some((tag) => tags.includes(tag));
+  const hasTerm = (values: string[]) => values.map(normalizeIntentText).some((term) => searchText.includes(term));
+  const hasPrimaryTag = (values: string[]) => values.some((tag) => primaryTags.includes(tag));
+  const hasPrimaryTerm = (values: string[]) => values.map(normalizeIntentText).some((term) => primarySearchText.includes(term));
+  const hasPrimaryRecipeTerm = (values: string[]) => values.map(normalizeIntentText).some((term) => primaryRecipeSearchText.includes(term));
+  switch (mood) {
+    case 'pasta':
+      return hasPrimaryTag(['pasta']) || hasPrimaryTerm(['パスタ', 'スパゲッティ', 'ペペロンチーノ', 'ナポリタン']);
+    case 'ramen':
+      return hasPrimaryTerm(['ラーメン', '中華そば', '中華麺']);
+    case 'udon':
+      return hasTerm(['うどん', '肉うどん', '釜玉うどん', '冷やしうどん']);
+    case 'soba':
+      return hasTerm(['そば', 'ざるそば', '温そば']);
+    case 'somen':
+      return hasTerm(['素麺', 'そうめん']);
+    case 'hiyashi-chuka':
+      return hasTerm(['冷やし中華']);
+    case 'korean':
+      return hasPrimaryTag(['korean', 'kimchi']) || hasPrimaryTerm(['韓国', 'キムチ', 'チゲ', 'スンドゥブ', 'ビビンバ', 'タッカルビ', 'ユッケジャン']);
+    case 'chinese':
+      return hasPrimaryTag(['chinese']) || hasPrimaryTerm(['中華', '麻婆', '回鍋肉', '青椒肉絲', '天津飯', '中華丼', '冷やし中華']);
+    case 'rice-bowl':
+      return hasTerm(['丼', '親子丼', '焼肉丼', 'ビビンバ', '炒飯', 'チャーハン', '雑炊', 'お茶漬け', 'ご飯', '白米']);
+    case 'western':
+      return hasPrimaryTag(['western', 'pasta']) || hasPrimaryTerm(['洋食', 'イタリアン', 'パスタ', 'グラタン', 'ハンバーグ']);
+    case 'curry':
+      return hasTerm(['カレー']);
+    case 'yakiniku':
+      return hasPrimaryRecipeTerm(['焼肉', '焼き肉', '焼肉丼']);
+    case 'sushi':
+      return hasTerm(['寿司', 'すし', '鮨']);
+    case 'hotpot':
+      return hasTerm(['鍋', 'チゲ', 'スンドゥブ', '湯豆腐', '豚汁']) || (hasTag(['soup']) && hasTag(['tofu', 'pork', 'korean']));
+    case 'stir-fry':
+      return hasTerm(['炒め', '炒飯', 'チャーハン', '回鍋肉', '青椒肉絲', 'タッカルビ', '豚キムチ']);
+    case 'spicy':
+      return hasTag(['kimchi', 'korean']) || hasTerm(['キムチ', 'チゲ', 'スンドゥブ', 'ユッケジャン', 'タッカルビ', '麻婆', '七味']);
+    case 'chicken':
+      return hasTag(['chicken']) || hasTerm(['鶏むね', '胸肉', 'むね肉', 'ささみ', '鶏もも', 'サラダチキン']);
+    case 'fish':
+      return hasTag(['fish', 'seafood']) || hasTerm(['魚', '鮭', 'サバ', '鯖', 'タラ', 'カツオ', 'マグロ', 'ツナ', '焼き魚', '寿司']);
+    default:
+      return true;
+  }
 }
 
 function diversifyCandidates(candidates: MealCandidate[], input: MealInput, intent: FreeTextIntent) {
