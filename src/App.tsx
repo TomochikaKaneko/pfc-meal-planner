@@ -75,6 +75,8 @@ export function App() {
   const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
   const [hasSavedReplanCondition, setHasSavedReplanCondition] = useState(false);
   const [planningSource, setPlanningSource] = useState<'home' | 'replan' | null>(null);
+  const [isTagSelectorOpen, setIsTagSelectorOpen] = useState(false);
+  const [draftTags, setDraftTags] = useState<ConditionTag[]>([]);
   const isPlanning = planningSource !== null;
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
@@ -113,6 +115,20 @@ export function App() {
   function toggleTag(tag: ConditionTag) {
     const exists = mealInput.tags.includes(tag);
     updateTags(exists ? mealInput.tags.filter((item) => item !== tag) : [...mealInput.tags, tag]);
+  }
+
+  function openTagSelector() {
+    setDraftTags(mealInput.tags);
+    setIsTagSelectorOpen(true);
+  }
+
+  function toggleDraftConditionTag(tag: ConditionTag) {
+    setDraftTags((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]));
+  }
+
+  function saveTagSelector() {
+    updateTags(draftTags);
+    setIsTagSelectorOpen(false);
   }
 
   function suggestMeals() {
@@ -248,7 +264,7 @@ export function App() {
         )}
 
         {tab === 'home' && (
-          <section className="stack">
+          <section className="stack home-screen">
             <div className="panel hero-panel">
               <div>
                 <p className="eyebrow">meal target</p>
@@ -291,18 +307,10 @@ export function App() {
                 <span>{mealInput.tags.length}個</span>
               </div>
               <p className="field-help">タグは献立提案で利用します。必要なものだけ選んでください。</p>
-              <div className="tag-grid">
-                {conditionOptions.map((option) => (
-                  <button
-                    type="button"
-                    className={mealInput.tags.includes(option.value) ? 'tag selected' : 'tag'}
-                    key={option.value}
-                    onClick={() => toggleTag(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+              <p className="selected-tag-summary">{formatSelectedTags(mealInput.tags)}</p>
+              <button className="secondary-action tag-selector-trigger" type="button" onClick={openTagSelector}>
+                条件タグを選択
+              </button>
             </section>
 
             <FreeConditionField value={freeCondition} onChange={updateFreeCondition} />
@@ -556,6 +564,14 @@ export function App() {
         <NavButton active={tab === 'foods'} icon={<BookOpen size={20} />} label="食品" onClick={() => setTab('foods')} />
         <NavButton active={tab === 'guide'} icon={<CircleHelp size={20} />} label="使い方" onClick={() => setTab('guide')} />
       </nav>
+      {isTagSelectorOpen && (
+        <TagSelectorModal
+          selectedTags={draftTags}
+          onToggleTag={toggleDraftConditionTag}
+          onCancel={() => setIsTagSelectorOpen(false)}
+          onSave={saveTagSelector}
+        />
+      )}
       {numericInputFocused && <KeyboardDoneControl />}
     </div>
   );
@@ -628,6 +644,57 @@ function PlanningStatus({ inline = false }: { inline?: boolean }) {
 
 function LoadingSpinner() {
   return <span className="loading-spinner" aria-hidden="true" />;
+}
+
+function formatSelectedTags(tags: ConditionTag[]) {
+  if (tags.length === 0) return '条件タグ：未選択';
+  const labels = tags.map((tag) => conditionOptions.find((option) => option.value === tag)?.label ?? tag);
+  return `条件タグ：${labels.join('、')}`;
+}
+
+function TagSelectorModal({
+  selectedTags,
+  onToggleTag,
+  onCancel,
+  onSave,
+}: {
+  selectedTags: ConditionTag[];
+  onToggleTag: (tag: ConditionTag) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="tag-selector-title">
+      <section className="replan-sheet tag-selector-sheet">
+        <div className="replan-sheet-header">
+          <h2 id="tag-selector-title">食べたい条件</h2>
+          <p>献立に反映したい条件だけ選んでください。</p>
+        </div>
+        <div className="tag-selector-body">
+          <div className="tag-grid selectable-tags">
+            {conditionOptions.map((option) => (
+              <button
+                type="button"
+                className={selectedTags.includes(option.value) ? 'tag selected' : 'tag'}
+                key={option.value}
+                onClick={() => onToggleTag(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="replan-sheet-actions">
+          <button className="secondary-action" type="button" onClick={onCancel}>
+            キャンセル
+          </button>
+          <button className="primary-action compact-action" type="button" onClick={onSave}>
+            保存
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function ReplanConditionModal({
