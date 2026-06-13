@@ -693,8 +693,8 @@ const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
     mood: 'oyakodon',
     keywords: ['親子丼', 'おやこ丼', 'おやこどん'],
     tags: ['chicken', 'egg', 'white-rice', 'rice-bowl'],
-    includeTerms: ['親子丼', '鶏むね親子丼', '鶏', '卵'],
-    penaltyTerms: ['ツナ', '鮭', 'マグロ', '牛', '豚'],
+    includeTerms: ['親子丼', '鶏むね親子丼', '牛とじ丼', '豚玉丼', '木の葉丼', '天津飯', 'かに玉', '鶏', '卵'],
+    penaltyTerms: ['ツナ', '鮭', 'マグロ'],
   },
   {
     mood: 'maguro',
@@ -924,7 +924,7 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
     case 'rice-bowl':
       return hasTerm(['丼', '親子丼', '焼肉丼', 'ビビンバ', '炒飯', 'チャーハン', '雑炊', 'お茶漬け', 'ご飯', '白米']);
     case 'oyakodon':
-      return hasPrimaryTerm(['親子丼', 'おやこ丼']) || (hasPrimaryTag(['chicken']) && hasPrimaryTag(['egg']) && hasPrimaryTag(['white-rice', 'rice-bowl']));
+      return hasPrimaryTerm(['親子丼', 'おやこ丼', '牛とじ丼', '豚玉丼', '木の葉丼', '天津飯', 'かに玉']);
     case 'western':
       return hasPrimaryTag(['western', 'pasta']) || hasPrimaryTerm(['洋食', 'イタリアン', 'パスタ', 'グラタン', 'ハンバーグ']);
     case 'curry':
@@ -965,7 +965,7 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
 }
 
 function diversifyCandidates(candidates: MealCandidate[], input: MealInput, intent: FreeTextIntent) {
-  const pool = candidates.sort((a, b) => macroFitRank(b) - macroFitRank(a));
+  const pool = deduplicateByPrimaryDish(candidates.sort((a, b) => macroFitRank(b) - macroFitRank(a)));
   const selected: MealCandidate[] = [];
   const strategies: Array<{
     label: string;
@@ -973,13 +973,18 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
   }> = [
     {
       label: '高タンパク案',
-      rank: (candidate) => macroFitRank(candidate) + candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) - similarityPenalty(candidate, selected),
+      rank: (candidate) =>
+        macroFitRank(candidate) +
+        candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
+        varietyScore(candidate, selected) -
+        similarityPenalty(candidate, selected),
     },
     {
       label: '低脂質案',
       rank: (candidate) =>
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
+        varietyScore(candidate, selected) +
         (hasMacroTarget(input, 'fat') && candidate.totals.fat <= input.fat ? 90 : 0) -
         candidate.totals.fat * 7 -
         similarityPenalty(candidate, selected),
@@ -989,6 +994,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
       rank: (candidate) =>
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
+        varietyScore(candidate, selected) +
         heartyMealShapeScore(candidate.items) +
         candidate.items.length * 12 -
         similarityPenalty(candidate, selected),
@@ -998,6 +1004,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
   for (const strategy of strategies) {
     const picked = pool
       .filter((candidate) => !selected.some((item) => item.id === candidate.id))
+      .filter((candidate) => !selected.some((item) => primaryDishKey(candidate) === primaryDishKey(item)))
       .sort((a, b) => strategy.rank(b) - strategy.rank(a))[0];
     if (picked) selected.push({ ...picked, label: refineLabel(strategy.label, picked, input) });
   }
@@ -1007,12 +1014,125 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
 
 function similarityPenalty(candidate: MealCandidate, selected: MealCandidate[]) {
   return selected.reduce((penalty, item) => {
+    const sameDish = primaryDishKey(candidate) === primaryDishKey(item) ? 520 : 0;
+    const sameProtein = proteinSourceKey(candidate) !== '' && proteinSourceKey(candidate) === proteinSourceKey(item) ? 220 : 0;
     const sameMain = getRoleRecipeName(candidate, '主菜') === getRoleRecipeName(item, '主菜') ? 260 : 0;
     const sameStaple = getRoleRecipeName(candidate, '主食') === getRoleRecipeName(item, '主食') ? 170 : 0;
     const tagOverlap = overlap(candidate.items.flatMap((mealItem) => mealItem.recipe.tags), item.items.flatMap((mealItem) => mealItem.recipe.tags));
     const closeName = hasSimilarRecipeName(candidate, item) ? 180 : 0;
-    return penalty + sameMain + sameStaple + tagOverlap * 22 + closeName;
+    return penalty + sameDish + sameMain + sameStaple + sameProtein + tagOverlap * 22 + closeName;
   }, 0);
+}
+
+function deduplicateByPrimaryDish(candidates: MealCandidate[]) {
+  const bestByDish = new Map<string, MealCandidate>();
+  for (const candidate of candidates) {
+    const key = primaryDishKey(candidate);
+    const current = bestByDish.get(key);
+    if (!current || macroFitRank(candidate) > macroFitRank(current)) {
+      bestByDish.set(key, candidate);
+    }
+  }
+  return [...bestByDish.values()];
+}
+
+function varietyScore(candidate: MealCandidate, selected: MealCandidate[]) {
+  if (selected.length === 0) return 0;
+
+  const candidateDish = primaryDishKey(candidate);
+  const candidateProtein = proteinSourceKey(candidate);
+  const candidateStyle = primaryMealStyleKey(candidate);
+  const candidateCategory = primaryRecipeCategoryKey(candidate);
+
+  return selected.reduce((score, item) => {
+    const differentDish = candidateDish !== primaryDishKey(item) ? 120 : -420;
+    const differentProtein = candidateProtein !== '' && candidateProtein !== proteinSourceKey(item) ? 120 : -220;
+    const differentStyle = candidateStyle !== '' && candidateStyle !== primaryMealStyleKey(item) ? 45 : 0;
+    const differentCategory = candidateCategory !== primaryRecipeCategoryKey(item) ? 35 : 0;
+    return score + differentDish + differentProtein + differentStyle + differentCategory;
+  }, 0);
+}
+
+function primaryDishKey(candidate: MealCandidate) {
+  const primary = getPrimaryDishItem(candidate);
+  return normalizeRecipeName(primary?.recipe.name ?? candidate.title);
+}
+
+function getPrimaryDishItem(candidate: MealCandidate) {
+  const staple = candidate.items.find((item) => item.role === '主食');
+  if (staple && isOneDishRecipe(staple.recipe)) return staple;
+  return candidate.items.find((item) => item.role === '主菜') ?? staple ?? candidate.items[0];
+}
+
+function primaryMealStyleKey(candidate: MealCandidate) {
+  return getPrimaryDishItem(candidate)?.recipe.mealStyle ?? '';
+}
+
+function primaryRecipeCategoryKey(candidate: MealCandidate) {
+  return getPrimaryDishItem(candidate)?.recipe.category ?? '';
+}
+
+function proteinSourceKey(candidate: MealCandidate) {
+  const primary = getPrimaryDishItem(candidate);
+  const ingredientKey = primary ? proteinIngredientKey(primary) : '';
+  if (ingredientKey) return ingredientKey;
+
+  const proteinTags = [
+    'chicken',
+    'beef',
+    'pork',
+    'fish',
+    'seafood',
+    'shrimp',
+    'squid',
+    'scallop',
+    'shirasu',
+    'mentaiko',
+    'tarako',
+    'crab-stick',
+    'processed-fish',
+    'tofu',
+    'egg',
+    'cheese',
+  ];
+  return primary?.recipe.tags.find((tag) => proteinTags.includes(tag)) ?? '';
+}
+
+function proteinIngredientKey(item: MealItem) {
+  const proteinFoodIds = [
+    'chicken-breast',
+    'sasami',
+    'lean-beef',
+    'beef-round',
+    'pork-fillet',
+    'pork-shabu',
+    'salmon',
+    'tuna-sashimi',
+    'canned-tuna',
+    'mackerel-can',
+    'bonito',
+    'cod',
+    'horse-mackerel',
+    'yellowtail',
+    'shrimp',
+    'peeled-shrimp',
+    'frozen-shrimp',
+    'squid',
+    'scallop',
+    'shirasu',
+    'tarako',
+    'mentaiko',
+    'crab-stick',
+    'kamaboko',
+    'sasa-kamaboko',
+    'chikuwa',
+    'egg',
+    'boiled-egg',
+    'firm-tofu',
+    'silken-tofu',
+    'melting-cheese',
+  ];
+  return item.ingredients.find((ingredient) => proteinFoodIds.includes(ingredient.food.id))?.food.id ?? '';
 }
 
 function macroFitRank(candidate: MealCandidate) {
@@ -1063,7 +1183,12 @@ function hasSimilarRecipeName(a: MealCandidate, b: MealCandidate) {
 }
 
 function normalizeRecipeName(name: string) {
-  return name.replace(/ご飯|定食|風|セット|和え|の|と|入り/g, '').slice(0, 5);
+  return name
+    .replace(/（白米\d+(?:\.\d+)?g）/g, '')
+    .replace(/\(白米\d+(?:\.\d+)?g\)/g, '')
+    .replace(/\d+(?:\.\d+)?g/g, '')
+    .replace(/ご飯|定食|風|セット|和え|の|と|入り/g, '')
+    .slice(0, 8);
 }
 
 function overlap(a: string[], b: string[]) {
