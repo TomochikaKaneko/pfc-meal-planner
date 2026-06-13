@@ -174,13 +174,19 @@ function buildTemplateCandidates(
 
   const candidates: MealCandidate[] = [];
   for (const staple of rolePools[0].recipes) {
-    for (const main of rolePools[1].recipes) {
+    const stapleIsOneDish = isOneDishRecipe(staple);
+    const mainRecipes = stapleIsOneDish ? [null] : rolePools[1].recipes;
+    for (const main of mainRecipes) {
       for (const side of rolePools[2].recipes) {
         for (const soup of rolePools[3].recipes) {
-          const selected = [staple, main, side, soup];
+          const selected = stapleIsOneDish ? [staple, side, soup] : [staple, main, side, soup];
+          const selectedRoles = stapleIsOneDish
+            ? [template.roles[0], template.roles[2], template.roles[3]]
+            : template.roles;
+          if (!selected.every((recipe): recipe is Recipe => recipe !== null)) continue;
           if (new Set(selected.map((recipe) => recipe.id)).size !== selected.length) continue;
           const items = selected
-            .map((recipe, index) => buildMealItem(recipe, template.roles[index].role, foodMap))
+            .map((recipe, index) => buildMealItem(recipe, selectedRoles[index].role, foodMap))
             .filter(isMealItem);
           if (items.length !== selected.length) continue;
           const withExtra = addOptionalExtra(items, template, input, foodMap, recipes);
@@ -222,7 +228,7 @@ function buildMealItem(recipe: Recipe, role: string, foodMap: Map<string, Food>)
     ingredients.push({
       food,
       serving,
-      amount: formatServing(serving, food.servingUnit),
+      amount: formatFoodServing(serving, food),
       macros: scaleMacros(food, serving),
     });
   }
@@ -287,7 +293,7 @@ function tuneWhiteRiceServing(items: MealItem[], input: MealInput): MealItem[] {
   const tunedRice = {
     ...rice,
     serving,
-    amount: formatServing(serving, rice.food.servingUnit),
+    amount: formatFoodServing(serving, rice.food),
     macros: scaleMacros(rice.food, serving),
   };
 
@@ -385,7 +391,13 @@ function scoreMeal(
   const lowFatScore = input.tags.includes('low-fat') ? Math.max(0, 180 - totals.fat * 7) : 0;
   const highProteinScore = input.tags.includes('high-protein') ? totals.protein * 3.2 : 0;
   const userFoodScore = items.some((item) => item.recipe.id.startsWith('generated-recipe-')) ? 260 : 0;
-  const structureScore = hasRole(items, '主食') && hasRole(items, '主菜') && hasRole(items, '副菜') ? 80 : -120;
+  const structureScore = hasOneDishMeal(items)
+    ? hasRole(items, '主食') && (hasRole(items, '副菜') || hasRole(items, '汁物'))
+      ? 90
+      : 20
+    : hasRole(items, '主食') && hasRole(items, '主菜') && hasRole(items, '副菜')
+      ? 80
+      : -120;
   const templateScore = items.some((item) => item.recipe.tags.includes(template.id)) ? 12 : 0;
   const intentScore = scoreMealIntent(items, totals, intent) * getIntentWeight(fitScore);
 
@@ -781,9 +793,7 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
   if (strictMoods.some((mood) => intent.moods.includes(mood) && !candidateMatchesMood(candidate, tags, searchText, mood))) return false;
   if (intent.moods.includes('hearty')) {
     const hasPenaltyTerm = intent.penaltyTerms.some((term) => searchText.includes(term));
-    const hasFillingMain = candidate.items.some(
-      (item) => item.role === '主菜' && item.recipe.tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood'].includes(tag)),
-    );
+    const hasFillingMain = candidate.items.some(hasFillingProteinItem);
     if (hasPenaltyTerm || !hasRole(candidate.items, '主食') || !hasFillingMain) return false;
   }
   return true;
@@ -906,10 +916,8 @@ function heartyMealShapeScore(items: MealItem[]) {
   const tags = items.flatMap((item) => item.recipe.tags);
   const names = normalizeIntentText(items.map((item) => item.recipe.name).join(' '));
   const hasStaple = hasRole(items, '主食');
-  const hasMain = hasRole(items, '主菜');
-  const hasFillingMain = items.some(
-    (item) => item.role === '主菜' && item.recipe.tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood'].includes(tag)),
-  );
+  const hasMain = hasRole(items, '主菜') || hasOneDishMeal(items);
+  const hasFillingMain = items.some(hasFillingProteinItem);
   const heartyName = ['丼', '定食', '炒め', '焼き', 'パスタ', 'ビビンバ', 'タッカルビ', '中華丼', '親子丼'].some((term) =>
     names.includes(normalizeIntentText(term)),
   );
@@ -1062,6 +1070,19 @@ function hasRole(items: MealItem[], role: string) {
   return items.some((item) => item.role === role);
 }
 
+function hasOneDishMeal(items: MealItem[]) {
+  return items.some((item) => item.role === '主食' && isOneDishRecipe(item.recipe));
+}
+
+function isOneDishRecipe(recipe: Recipe) {
+  return recipe.category === 'staple' && recipe.mealStyle !== undefined && recipe.mealStyle !== 'setMeal';
+}
+
+function hasFillingProteinItem(item: MealItem) {
+  const proteinTags = ['chicken', 'beef', 'pork', 'fish', 'seafood'];
+  return item.recipe.tags.some((tag) => proteinTags.includes(tag));
+}
+
 function sumMacros(macros: MacroProfile[]): MacroProfile {
   return macroKeys.reduce(
     (acc, key) => ({
@@ -1096,6 +1117,14 @@ function clampToStep(value: number, food: Food) {
   const clamped = Math.min(food.maxServing, Math.max(food.minServing, value));
   const stepped = Math.round((clamped - food.minServing) / food.step) * food.step + food.minServing;
   return round1(Math.min(food.maxServing, Math.max(food.minServing, stepped)));
+}
+
+function formatFoodServing(value: number, food: Food) {
+  if (food.id === 'spaghetti') {
+    const amount = `乾麺${formatServing(value, food.servingUnit)}`;
+    return value === 100 ? `${amount}（1束）` : amount;
+  }
+  return formatServing(value, food.servingUnit);
 }
 
 function formatServing(value: number, unit: string) {

@@ -24,6 +24,8 @@ export type RecipeCategory =
   | 'supplement'
   | 'seasoning';
 
+export type RecipeMealStyle = 'setMeal' | 'oneDish' | 'bowl' | 'noodle' | 'pasta' | 'curry';
+
 export type MealTiming = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export type ConditionTag =
@@ -76,6 +78,7 @@ export interface Recipe {
   id: string;
   name: string;
   category: RecipeCategory;
+  mealStyle?: RecipeMealStyle;
   ingredients: RecipeIngredient[];
   tags: string[];
   mealTiming: MealTiming[];

@@ -872,6 +872,7 @@ function recipeSeed(
     category,
     ingredients,
     tags,
+    mealStyle: inferRecipeMealStyle(id, name, tags),
     mealTiming,
     description,
     cookingTime,
@@ -1029,8 +1030,41 @@ const practicalRecipeSeeds: RecipeSeed[] = [
 
 export const initialRecipes: Recipe[] = [...recipeSeeds, ...practicalRecipeSeeds].map((recipe) => ({
   ...recipe,
+  mealStyle: recipe.mealStyle ?? inferRecipeMealStyle(recipe.id, recipe.name, recipe.tags),
   mealTiming: recipe.mealTiming ?? inferMealTiming(recipe),
 }));
+
+function inferRecipeMealStyle(id: string, name: string, tags: string[]): Recipe['mealStyle'] {
+  if (tags.includes('pasta')) return 'pasta';
+  if (tags.includes('ramen') || id.includes('ramen')) return 'noodle';
+  if (tags.includes('curry') || id.includes('curry') || name.includes('カレー')) return 'curry';
+  if (
+    id.includes('don') ||
+    id.includes('bowl') ||
+    id.includes('bibimbap') ||
+    id.includes('fried-rice') ||
+    id.includes('porridge') ||
+    name.includes('丼') ||
+    name.includes('ビビンバ') ||
+    name.includes('炒飯') ||
+    name.includes('雑炊')
+  ) {
+    return 'bowl';
+  }
+  if (
+    id.includes('udon') ||
+    id.includes('soba') ||
+    id.includes('somen') ||
+    id.includes('hiyashi') ||
+    name.includes('うどん') ||
+    name.includes('そば') ||
+    name.includes('素麺') ||
+    name.includes('冷やし中華')
+  ) {
+    return 'noodle';
+  }
+  return 'setMeal';
+}
 
 function inferMealTiming(recipe: RecipeSeed): MealTiming[] {
   if (recipe.tags.includes('breakfast')) return ['breakfast'];
