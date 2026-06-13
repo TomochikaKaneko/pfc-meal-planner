@@ -900,7 +900,7 @@ button {
 }
 
 .food-browser {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   min-height: calc(100dvh - 154px - env(safe-area-inset-bottom));
 }
 
@@ -909,6 +909,49 @@ button {
   gap: 14px;
   min-height: 128px;
   align-content: start;
+}
+
+.excluded-food-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.excluded-food-summary h3,
+.excluded-food-summary p {
+  margin: 0;
+}
+
+.excluded-food-summary h3 {
+  color: #22342e;
+  font-size: 1rem;
+}
+
+.excluded-food-summary p {
+  color: #64776f;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.excluded-food-summary strong {
+  color: #2f7d68;
+  font-size: 0.88rem;
+}
+
+.excluded-food-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.excluded-food-chip-row button {
+  min-height: 32px;
+  border: 1px solid rgba(47, 125, 104, 0.18);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #315346;
+  background: #eef8f2;
+  font-size: 0.78rem;
+  font-weight: 850;
 }
 
 .food-search-field {
@@ -999,6 +1042,40 @@ button {
   justify-content: space-between;
   gap: 12px;
   padding: 14px;
+}
+
+.food-row-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.exclude-food-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  gap: 6px;
+  border: 1px solid rgba(47, 125, 104, 0.18);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #46645a;
+  background: #f6fbf7;
+  font-size: 0.76rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.exclude-food-toggle.checked {
+  border-color: #ba4e39;
+  color: #9a3d2b;
+  background: #fff0eb;
+}
+
+.exclude-food-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #ba4e39;
 }
 
 .food-row-title {

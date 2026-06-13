@@ -8,6 +8,7 @@ import type { ConditionTag, Food, FoodCategory, MacroKey, MealCandidate, MealInp
 const USER_FOODS_KEY = 'pfc-meal-planner:user-foods';
 const LAST_INPUT_KEY = 'pfc-meal-planner:last-input';
 const FREE_CONDITION_KEY = 'pfc-meal-planner:free-condition';
+const EXCLUDED_FOODS_KEY = 'pfcMealPlanner.excludedFoodIds';
 
 const conditionOptions: { value: ConditionTag; label: string }[] = [
   { value: 'white-rice', label: '白米' },
@@ -63,6 +64,7 @@ export function App() {
   const [mealInput, setMealInput] = useState<MealInput>(() => loadMealInput());
   const [freeCondition, setFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
+  const [excludedFoodIds, setExcludedFoodIds] = useState<string[]>(() => loadExcludedFoodIds());
   const [foodSearch, setFoodSearch] = useState('');
   const [foodCategoryFilter, setFoodCategoryFilter] = useState<FoodCategory | 'all'>('all');
   const [results, setResults] = useState<MealCandidate[]>([]);
@@ -82,6 +84,8 @@ export function App() {
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
   const filteredFoods = useMemo(() => filterFoods(foods, foodSearch, foodCategoryFilter), [foods, foodSearch, foodCategoryFilter]);
+  const excludedFoodIdSet = useMemo(() => new Set(excludedFoodIds), [excludedFoodIds]);
+  const excludedFoods = useMemo(() => foods.filter((food) => excludedFoodIdSet.has(food.id)), [foods, excludedFoodIdSet]);
 
   useEffect(() => {
     const showUpdate = () => setUpdateReady(true);
@@ -153,7 +157,7 @@ export function App() {
       (acc, field) => ({ ...acc, [field.key]: normalizeMacroTarget(input[field.key], null) }),
       { ...input },
     );
-    const candidates = createMealCandidates(safeInput, foods, undefined, parseFreeCondition(condition));
+    const candidates = createMealCandidates(safeInput, foods, undefined, parseFreeCondition(condition), excludedFoodIds);
     setResults(candidates);
     setHasGeneratedResults(true);
     setHasSavedReplanCondition(false);
@@ -229,6 +233,19 @@ export function App() {
     const nextFoods = userFoods.filter((food) => food.id !== id);
     setUserFoods(nextFoods);
     localStorage.setItem(USER_FOODS_KEY, JSON.stringify(nextFoods));
+    if (excludedFoodIds.includes(id)) {
+      const nextExcluded = excludedFoodIds.filter((foodId) => foodId !== id);
+      setExcludedFoodIds(nextExcluded);
+      localStorage.setItem(EXCLUDED_FOODS_KEY, JSON.stringify(nextExcluded));
+    }
+  }
+
+  function toggleExcludedFood(id: string) {
+    const nextExcluded = excludedFoodIds.includes(id)
+      ? excludedFoodIds.filter((foodId) => foodId !== id)
+      : [...excludedFoodIds, id];
+    setExcludedFoodIds(nextExcluded);
+    localStorage.setItem(EXCLUDED_FOODS_KEY, JSON.stringify(nextExcluded));
   }
 
   return (
@@ -340,7 +357,7 @@ export function App() {
             </button>
 
             {results.length === 0 ? (
-              <NoResultState hasGenerated={hasGeneratedResults} freeCondition={freeCondition} />
+              <NoResultState hasGenerated={hasGeneratedResults} freeCondition={freeCondition} excludedFoodCount={excludedFoodIds.length} />
             ) : (
               results.map((meal, index) => <MealCard meal={meal} rank={index + 1} key={meal.id} />)
             )}
@@ -414,8 +431,26 @@ export function App() {
           <section className="stack food-browser">
             <div className="section-title">
               <h2>食品一覧</h2>
-              <span>{foodCategoryFilter === 'all' ? 'すべて' : categoryLabel(foodCategoryFilter)} {filteredFoods.length}件</span>
+              <span>
+                {foodCategoryFilter === 'all' ? 'すべて' : categoryLabel(foodCategoryFilter)} {filteredFoods.length}件 / {excludedFoodIds.length}件除外中
+              </span>
             </div>
+            <section className="panel excluded-food-summary">
+              <div>
+                <h3>出さない食品</h3>
+                <p>献立に出したくない食品を選択できます。食品DBからは削除されません。</p>
+              </div>
+              <strong>{excludedFoodIds.length}件除外中</strong>
+              {excludedFoods.length > 0 && (
+                <div className="excluded-food-chip-row" aria-label="除外中の食品">
+                  {excludedFoods.map((food) => (
+                    <button type="button" key={food.id} onClick={() => toggleExcludedFood(food.id)}>
+                      {food.name} ×
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
             <section className="panel food-filter-panel">
               <label className="food-search-field">
                 食品を検索
@@ -469,11 +504,21 @@ export function App() {
                       {food.servingUnit} / {food.tags.join(', ') || 'タグなし'}
                     </small>
                   </div>
-                  {food.source === 'user' && (
-                    <button className="icon-button danger" type="button" aria-label={`${food.name}を削除`} onClick={() => deleteFood(food.id)}>
-                      <Trash2 size={18} />
-                    </button>
-                  )}
+                  <div className="food-row-actions">
+                    <label className={excludedFoodIdSet.has(food.id) ? 'exclude-food-toggle checked' : 'exclude-food-toggle'}>
+                      <input
+                        type="checkbox"
+                        checked={excludedFoodIdSet.has(food.id)}
+                        onChange={() => toggleExcludedFood(food.id)}
+                      />
+                      出さない
+                    </label>
+                    {food.source === 'user' && (
+                      <button className="icon-button danger" type="button" aria-label={`${food.name}を削除`} onClick={() => deleteFood(food.id)}>
+                        <Trash2 size={18} />
+                      </button>
+                    )}
+                  </div>
                 </article>
                 </div>
               ))}
@@ -618,7 +663,15 @@ function MacroInput({
   );
 }
 
-function NoResultState({ hasGenerated, freeCondition }: { hasGenerated: boolean; freeCondition: string }) {
+function NoResultState({
+  hasGenerated,
+  freeCondition,
+  excludedFoodCount,
+}: {
+  hasGenerated: boolean;
+  freeCondition: string;
+  excludedFoodCount: number;
+}) {
   const help = buildNoResultHelp(freeCondition);
   if (!hasGenerated) {
     return (
@@ -633,6 +686,11 @@ function NoResultState({ hasGenerated, freeCondition }: { hasGenerated: boolean;
     <div className="empty-state">
       <ChefHat size={36} />
       <p>{help.message}</p>
+      {excludedFoodCount > 0 && (
+        <small>
+          除外設定により候補が少なくなっている可能性があります。出さない食品を一部解除すると候補が増える可能性があります。
+        </small>
+      )}
       {help.suggestions.length > 0 && (
         <small>
           近い候補: {help.suggestions.join('、')}
@@ -1122,6 +1180,15 @@ function loadMealInput(): MealInput {
 
 function loadUserFoods(): Food[] {
   return normalizeUserFoods(loadJson<unknown>(USER_FOODS_KEY, []));
+}
+
+function loadExcludedFoodIds(): string[] {
+  return normalizeStringArray(loadJson<unknown>(EXCLUDED_FOODS_KEY, []));
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim()))];
 }
 
 function normalizeMealInput(value: unknown): MealInput {

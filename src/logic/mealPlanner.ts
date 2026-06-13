@@ -138,12 +138,17 @@ export function createMealCandidates(
   foods: Food[],
   recipes: Recipe[] = initialRecipes,
   freeTextTerms: string[] = [],
+  excludedFoodIds: string[] = [],
 ): MealCandidate[] {
   const foodMap = new Map(foods.map((food) => [food.id, food]));
+  const excludedFoodIdSet = new Set(excludedFoodIds);
+  const hasExcludedFood = (recipe: Recipe) => recipe.ingredients.some((ingredient) => excludedFoodIdSet.has(ingredient.foodId));
   const intent = buildFreeTextIntent(freeTextTerms);
-  const baseRecipePool = [...recipes, ...createUserFoodRecipes(foods)].filter((recipe) => isUsableRecipe(recipe, foodMap));
+  const baseRecipePool = [...recipes, ...createUserFoodRecipes(foods)].filter(
+    (recipe) => isUsableRecipe(recipe, foodMap) && !hasExcludedFood(recipe),
+  );
   const recipePool = [...baseRecipePool, ...createDerivedRecipes(baseRecipePool, foodMap)].filter((recipe) =>
-    isUsableRecipe(recipe, foodMap),
+    isUsableRecipe(recipe, foodMap) && !hasExcludedFood(recipe),
   );
   const candidates = mealTemplates.flatMap((template) => buildTemplateCandidates(template, input, foodMap, recipePool, intent));
   const viableCandidates = candidates
