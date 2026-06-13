@@ -750,8 +750,7 @@ button {
   font-weight: 800;
 }
 
-.meal-item strong,
-.meal-item small {
+.meal-item strong {
   display: block;
 }
 
@@ -759,12 +758,32 @@ button {
   line-height: 1.35;
 }
 
-.meal-item small {
-  margin-top: 3px;
+.ingredient-list {
+  display: grid;
+  gap: 3px;
+  margin: 5px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ingredient-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
   color: #65796f;
   font-size: 0.72rem;
   font-weight: 750;
   line-height: 1.35;
+}
+
+.ingredient-list li span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ingredient-list li span:last-child {
+  flex: 0 0 auto;
+  color: #315346;
 }
 
 .macro-strip {

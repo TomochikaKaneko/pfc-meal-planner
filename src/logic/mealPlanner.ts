@@ -1285,6 +1285,9 @@ function formatFoodServing(value: number, food: Food) {
     const amount = `乾麺${formatServing(value, food.servingUnit)}`;
     return value === 100 ? `${amount}（1束）` : amount;
   }
+  if (food.category === 'seasoning' && value === food.baseServing && food.standardAmount) {
+    return food.standardAmount;
+  }
   return formatServing(value, food.servingUnit);
 }
 

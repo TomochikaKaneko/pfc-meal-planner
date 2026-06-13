@@ -909,7 +909,14 @@ function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
             <span>{item.role}</span>
             <div>
               <strong>{item.recipe.name}</strong>
-              <small>{item.ingredients.map((ingredient) => `${ingredient.food.name} ${ingredient.amount}`).join(' / ')}</small>
+              <ul className="ingredient-list" aria-label={`${item.recipe.name}の材料`}>
+                {item.ingredients.map((ingredient) => (
+                  <li key={`${item.recipe.id}-${ingredient.food.id}-${ingredient.amount}`}>
+                    <span>{ingredient.food.name}</span>
+                    <span>{ingredient.amount}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         ))}
