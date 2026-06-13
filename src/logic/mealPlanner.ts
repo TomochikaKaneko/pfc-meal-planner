@@ -689,6 +689,69 @@ const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
     tags: ['fish', 'seafood', 'japanese'],
     includeTerms: ['魚', '鮭', 'サバ', '鯖', 'タラ', 'カツオ', 'マグロ', 'ツナ', '焼き魚'],
   },
+  {
+    mood: 'oyakodon',
+    keywords: ['親子丼', 'おやこ丼', 'おやこどん'],
+    tags: ['chicken', 'egg', 'white-rice', 'rice-bowl'],
+    includeTerms: ['親子丼', '鶏むね親子丼', '鶏', '卵'],
+    penaltyTerms: ['ツナ', '鮭', 'マグロ', '牛', '豚'],
+  },
+  {
+    mood: 'maguro',
+    keywords: ['マグロ', 'まぐろ', '鮪'],
+    tags: ['tuna-sashimi', 'sashimi', 'fish'],
+    includeTerms: ['マグロ', 'まぐろ', '鮪', 'tuna-sashimi', '漬けマグロ', 'ネギトロ'],
+    penaltyTerms: ['鮭', 'サバ', 'タラ', 'カツオ', 'アジ', 'ぶり'],
+  },
+  {
+    mood: 'sasami',
+    keywords: ['ささみ', 'ササミ'],
+    tags: ['chicken', 'low-fat', 'high-protein'],
+    includeTerms: ['ささみ', 'ササミ', 'sasami'],
+    penaltyTerms: ['鶏むね', '鶏もも', 'サラダチキン'],
+  },
+  {
+    mood: 'crab-stick',
+    keywords: ['かにかま', 'カニカマ', '蟹かま'],
+    tags: ['crab-stick', 'processed-fish', 'seafood'],
+    includeTerms: ['かにかま', 'カニカマ', '蟹かま', 'crab-stick', '天津飯', 'かに玉'],
+    penaltyTerms: ['鮭', 'サバ', 'マグロ', 'ツナ'],
+  },
+  {
+    mood: 'mentaiko',
+    keywords: ['明太子', '明太', 'めんたいこ'],
+    tags: ['mentaiko', 'spicy', 'fish'],
+    includeTerms: ['明太子', '明太', 'めんたいこ', 'mentaiko', '明太パスタ'],
+    penaltyTerms: ['たらこ', '鮭', 'サバ', 'ツナ'],
+  },
+  {
+    mood: 'tarako',
+    keywords: ['たらこ', 'タラコ'],
+    tags: ['tarako', 'fish'],
+    includeTerms: ['たらこ', 'タラコ', 'tarako', 'たらこパスタ'],
+    penaltyTerms: ['明太子', '鮭', 'サバ', 'ツナ'],
+  },
+  {
+    mood: 'ikura',
+    keywords: ['いくら', 'イクラ'],
+    tags: ['ikura'],
+    includeTerms: ['いくら', 'イクラ', 'ikura'],
+    penaltyTerms: ['鮭', 'サーモン', '卵', 'たらこ', '明太子'],
+  },
+  {
+    mood: 'seafood',
+    keywords: ['魚介', '海鮮', 'シーフード'],
+    tags: ['seafood', 'fish', 'sashimi'],
+    includeTerms: ['魚介', '海鮮', 'シーフード', 'えび', 'いか', 'ほたて', 'しらす', 'かにかま'],
+    penaltyTerms: ['鶏むね', '豚ヒレ', '牛赤身'],
+  },
+  {
+    mood: 'sashimi',
+    keywords: ['刺身', 'お刺身'],
+    tags: ['sashimi', 'fish', 'seafood'],
+    includeTerms: ['刺身', 'マグロ', 'カツオ', 'アジ', 'ほたて', 'いか', '海鮮'],
+    penaltyTerms: ['サバ刺身', 'タラ刺身', 'サバ缶', 'タラ'],
+  },
 ];
 
 function buildFreeTextIntent(terms: string[]): FreeTextIntent {
@@ -795,6 +858,7 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'korean',
     'chinese',
     'rice-bowl',
+    'oyakodon',
     'western',
     'curry',
     'yakiniku',
@@ -804,6 +868,14 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'spicy',
     'chicken',
     'fish',
+    'maguro',
+    'sasami',
+    'crab-stick',
+    'mentaiko',
+    'tarako',
+    'ikura',
+    'seafood',
+    'sashimi',
   ];
   if (strictMoods.some((mood) => intent.moods.includes(mood) && !candidateMatchesMood(candidate, tags, searchText, mood))) return false;
   if (intent.moods.includes('hearty')) {
@@ -851,6 +923,8 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
       return hasPrimaryTag(['chinese']) || hasPrimaryTerm(['中華', '麻婆', '回鍋肉', '青椒肉絲', '天津飯', '中華丼', '冷やし中華']);
     case 'rice-bowl':
       return hasTerm(['丼', '親子丼', '焼肉丼', 'ビビンバ', '炒飯', 'チャーハン', '雑炊', 'お茶漬け', 'ご飯', '白米']);
+    case 'oyakodon':
+      return hasPrimaryTerm(['親子丼', 'おやこ丼']) || (hasPrimaryTag(['chicken']) && hasPrimaryTag(['egg']) && hasPrimaryTag(['white-rice', 'rice-bowl']));
     case 'western':
       return hasPrimaryTag(['western', 'pasta']) || hasPrimaryTerm(['洋食', 'イタリアン', 'パスタ', 'グラタン', 'ハンバーグ']);
     case 'curry':
@@ -869,6 +943,22 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
       return hasTag(['chicken']) || hasTerm(['鶏むね', '胸肉', 'むね肉', 'ささみ', '鶏もも', 'サラダチキン']);
     case 'fish':
       return hasTag(['fish', 'seafood']) || hasTerm(['魚', '鮭', 'サバ', '鯖', 'タラ', 'カツオ', 'マグロ', 'ツナ', '焼き魚', '寿司']);
+    case 'maguro':
+      return hasPrimaryTag(['tuna-sashimi']) || hasPrimaryTerm(['マグロ', 'まぐろ', '鮪', '漬けマグロ', 'ネギトロ']);
+    case 'sasami':
+      return hasPrimaryTerm(['ささみ', 'ササミ']) || primaryItems.some((item) => item.ingredients.some((ingredient) => ingredient.food.id === 'sasami'));
+    case 'crab-stick':
+      return hasPrimaryTag(['crab-stick']) || hasPrimaryTerm(['かにかま', 'カニカマ', '天津飯', 'かに玉']);
+    case 'mentaiko':
+      return hasPrimaryTag(['mentaiko']) || hasPrimaryTerm(['明太子', '明太', 'めんたいこ']);
+    case 'tarako':
+      return hasPrimaryTag(['tarako']) || hasPrimaryTerm(['たらこ', 'タラコ']);
+    case 'ikura':
+      return hasPrimaryTag(['ikura']) || hasPrimaryTerm(['いくら', 'イクラ']);
+    case 'seafood':
+      return hasPrimaryTag(['seafood']) || hasPrimaryTerm(['魚介', '海鮮', 'シーフード', 'えび', 'いか', 'ほたて', 'しらす', 'かにかま']);
+    case 'sashimi':
+      return hasPrimaryTag(['sashimi']) || hasPrimaryTerm(['刺身', 'マグロ', 'カツオ', 'アジ', 'ほたて', 'いか', '海鮮']);
     default:
       return true;
   }
