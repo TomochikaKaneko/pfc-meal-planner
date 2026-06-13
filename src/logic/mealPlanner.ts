@@ -550,6 +550,20 @@ const canonicalFreeTextIntentRules: typeof freeTextIntentRules = [
 
 const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
   {
+    mood: 'chinjao',
+    keywords: ['\u9752\u6912\u8089\u7d72', '\u30c1\u30f3\u30b8\u30e3\u30aa\u30ed\u30fc\u30b9', '\u30c1\u30f3\u30b8\u30e3\u30aa\u30ed\u30fc\u30b9\u30fc'],
+    tags: ['chinese', 'satisfying'],
+    includeTerms: ['\u9752\u6912\u8089\u7d72', '\u30d4\u30fc\u30de\u30f3', '\u305f\u3051\u306e\u3053'],
+    penaltyTerms: ['\u5929\u6d25\u98ef', '\u4e2d\u83ef\u4e3c', '\u30e9\u30fc\u30e1\u30f3', '\u30c1\u30e3\u30fc\u30cf\u30f3', '\u7092\u98ef', '\u9ebb\u5a46', '\u516b\u5b9d\u83dc'],
+  },
+  {
+    mood: 'bulgogi',
+    keywords: ['\u30d7\u30eb\u30b3\u30ae'],
+    tags: ['korean', 'satisfying'],
+    includeTerms: ['\u30d7\u30eb\u30b3\u30ae', '\u713c\u8089\u306e\u305f\u308c'],
+    penaltyTerms: ['\u30d3\u30d3\u30f3\u30d0', '\u30bf\u30c3\u30ab\u30eb\u30d3', '\u30c1\u30b2', '\u30b9\u30f3\u30c9\u30a5\u30d6', '\u7d0d\u8c46\u3054\u98ef'],
+  },
+  {
     mood: 'ramen',
     keywords: ['ラーメン', 'らーめん', '中華そば', '中華麺'],
     tags: ['noodle', 'chinese'],
@@ -860,6 +874,8 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'somen',
     'hiyashi-chuka',
     'yakisoba',
+    'chinjao',
+    'bulgogi',
     'korean',
     'chinese',
     'rice-bowl',
@@ -922,6 +938,10 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
       return hasTerm(['冷やし中華']);
     case 'yakisoba':
       return hasPrimaryTag(['yakisoba']) || hasPrimaryTerm(['焼きそば']);
+    case 'chinjao':
+      return hasPrimaryTerm(['\u9752\u6912\u8089\u7d72', '\u30c1\u30f3\u30b8\u30e3\u30aa\u30ed\u30fc\u30b9', '\u30c1\u30f3\u30b8\u30e3\u30aa\u30ed\u30fc\u30b9\u30fc']);
+    case 'bulgogi':
+      return hasPrimaryTerm(['\u30d7\u30eb\u30b3\u30ae']);
     case 'korean':
       return hasPrimaryTag(['korean', 'kimchi']) || hasPrimaryTerm(['韓国', 'キムチ', 'チゲ', 'スンドゥブ', 'ビビンバ', 'タッカルビ', 'ユッケジャン']);
     case 'chinese':
