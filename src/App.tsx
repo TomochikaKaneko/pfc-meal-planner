@@ -66,6 +66,7 @@ export function App() {
   const [foodSearch, setFoodSearch] = useState('');
   const [foodCategoryFilter, setFoodCategoryFilter] = useState<FoodCategory | 'all'>('all');
   const [results, setResults] = useState<MealCandidate[]>([]);
+  const [hasGeneratedResults, setHasGeneratedResults] = useState(false);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
   const [updateReady, setUpdateReady] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -154,6 +155,7 @@ export function App() {
     );
     const candidates = createMealCandidates(safeInput, foods, undefined, parseFreeCondition(condition));
     setResults(candidates);
+    setHasGeneratedResults(true);
     setHasSavedReplanCondition(false);
     setTab('results');
   }
@@ -338,10 +340,7 @@ export function App() {
             </button>
 
             {results.length === 0 ? (
-              <div className="empty-state">
-                <ChefHat size={36} />
-                <p>まだ候補がありません。残りPFCを入力して献立を提案してください。</p>
-              </div>
+              <NoResultState hasGenerated={hasGeneratedResults} freeCondition={freeCondition} />
             ) : (
               results.map((meal, index) => <MealCard meal={meal} rank={index + 1} key={meal.id} />)
             )}
@@ -616,6 +615,63 @@ function MacroInput({
         {unit && <small>{unit}</small>}
       </div>
     </label>
+  );
+}
+
+function NoResultState({ hasGenerated, freeCondition }: { hasGenerated: boolean; freeCondition: string }) {
+  const help = buildNoResultHelp(freeCondition);
+  if (!hasGenerated) {
+    return (
+      <div className="empty-state">
+        <ChefHat size={36} />
+        <p>まだ候補がありません。摂りたいPFCを入力して献立を提案してください。</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="empty-state">
+      <ChefHat size={36} />
+      <p>{help.message}</p>
+      {help.suggestions.length > 0 && (
+        <small>
+          近い候補: {help.suggestions.join('、')}
+        </small>
+      )}
+    </div>
+  );
+}
+
+function buildNoResultHelp(freeCondition: string) {
+  const terms = parseFreeCondition(freeCondition).join(' ');
+  const checks: Array<{ keywords: string[]; message: string; suggestions: string[] }> = [
+    {
+      keywords: ['ラーメン', 'らーめん', '中華そば'],
+      message: 'ラーメン条件に合う候補が現在不足しています。PFC条件を少し緩めるか、近い麺料理を試してください。',
+      suggestions: ['中華麺', '冷やし中華', 'うどん'],
+    },
+    {
+      keywords: ['カレー'],
+      message: 'カレー条件に合う候補が現在不足しています。カレー系料理は追加中ですが、PFC条件によっては候補が少なくなります。',
+      suggestions: ['鶏むねカレー', '豚ヒレカレー', 'カレーご飯'],
+    },
+    {
+      keywords: ['焼肉', '焼き肉'],
+      message: '焼肉条件に合う候補が少ない状態です。脂質やカロリー条件を少し緩めると表示されやすくなります。',
+      suggestions: ['牛赤身焼肉', '豚ヒレ焼肉', '焼肉丼'],
+    },
+    {
+      keywords: ['パスタ', 'スパゲッティ'],
+      message: 'パスタ条件に合う候補が現在不足しています。PFC条件、特に炭水化物量を少し広げると表示されやすくなります。',
+      suggestions: ['和風パスタ', '鶏むねパスタ', '冷製パスタ'],
+    },
+  ];
+  const matched = checks.find((item) => item.keywords.some((keyword) => terms.includes(keyword)));
+  return (
+    matched ?? {
+      message: '条件に近い献立が少ないため、表示できる候補がありません。PFC条件を少し緩めるか、フリーワードを変えて試してください。',
+      suggestions: ['白米', '鶏むね', '魚', 'さっぱり', 'ガッツリ'],
+    }
   );
 }
 

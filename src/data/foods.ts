@@ -1174,6 +1174,20 @@ const foodSeeds: FoodSeed[] = [
     pairsWith: ['豚ヒレ', 'キャベツ', '鶏むね肉'],
     source: 'initial',
   },
+  {
+    id: 'curry-powder',
+    name: 'カレー粉',
+    category: 'seasoning',
+    standardAmount: '小さじ1',
+    kcal: 8,
+    protein: 0.3,
+    fat: 0.3,
+    carb: 1.3,
+    tags: ['seasoning', 'curry'],
+    mealTiming: ['lunch', 'dinner'],
+    pairsWith: ['鶏むね肉', '豚ヒレ', '牛赤身', '白米'],
+    source: 'initial',
+  },
 ];
 
 const servingRules: Record<string, ServingRule> = {
@@ -1239,6 +1253,7 @@ const servingRules: Record<string, ServingRule> = {
   banana: { baseServing: 1, servingUnit: '本', minServing: 1, maxServing: 1, step: 1 },
   kiwi: { baseServing: 1, servingUnit: '個', minServing: 1, maxServing: 2, step: 1 },
   apple: { baseServing: 0.5, servingUnit: '個', minServing: 0.5, maxServing: 1, step: 0.5 },
+  'curry-powder': { baseServing: 1, servingUnit: '回', minServing: 1, maxServing: 1, step: 1 },
 };
 
 const defaultServingRules: Record<Food['category'], ServingRule> = {

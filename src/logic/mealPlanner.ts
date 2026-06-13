@@ -974,7 +974,13 @@ function calculateFitScore(diff: MacroDiffProfile) {
   const specifiedKeys = macroKeys.filter((key) => diff[key] !== null);
   if (specifiedKeys.length === 0) return 50;
   const distance = specifiedKeys.reduce((sum, key) => sum + Math.abs(diff[key] ?? 0) * weights[key], 0);
-  return Math.max(1, Math.min(99, Math.round(100 - distance)));
+  const rawScore = Math.max(1, Math.min(99, Math.round(100 - distance)));
+  const kcalDiff = diff.kcal;
+  if (kcalDiff === null) return rawScore;
+  const kcalGap = Math.abs(kcalDiff);
+  if (kcalGap >= 150) return Math.min(rawScore, 80);
+  if (kcalGap >= 100) return Math.min(rawScore, 90);
+  return rawScore;
 }
 
 function classifyCandidate(template: MealTemplate, items: MealItem[], input: MealInput) {
@@ -1006,8 +1012,50 @@ function classifyCandidateLabel(candidate: MealCandidate, input: MealInput, fall
 }
 
 function buildMealTitle(template: MealTemplate, items: MealItem[]) {
-  const main = items.find((item) => item.role === '主菜')?.recipe.name;
-  return main ? `${main}の${template.name}` : template.title;
+  const representative = pickRepresentativeMealItem(items);
+  if (!representative) return template.title;
+
+  const name = representative.recipe.name;
+  if (representative.role === '主食' && isNamedStapleDish(name)) return name;
+  if (representative.role === '主菜') return `${name}定食`;
+  return name;
+}
+
+function pickRepresentativeMealItem(items: MealItem[]) {
+  const staple = items.find((item) => item.role === '主食');
+  const main = items.find((item) => item.role === '主菜');
+  const candidateItems = [staple, main, ...items].filter((item): item is MealItem => Boolean(item));
+  return candidateItems
+    .map((item) => ({ item, score: representativeDishScore(item) }))
+    .sort((a, b) => b.score - a.score)[0]?.item;
+}
+
+function representativeDishScore(item: MealItem) {
+  const name = item.recipe.name;
+  const tags = item.recipe.tags;
+  const weakMain = item.role === '主菜' && ['冷奴', 'ゆで卵', 'プロテイン', '湯豆腐', '補助'].some((term) => name.includes(term));
+  const namedStaple = item.role === '主食' && isNamedStapleDish(name);
+  const specificStaple = item.role === '主食' && ['パスタ', 'ラーメン', '中華そば', '中華麺', 'カレー', '焼肉'].some((term) => name.includes(term));
+  const genreDish = tags.some((tag) => ['ramen', 'pasta', 'curry', 'yakiniku', 'korean', 'chinese'].includes(tag));
+  const fillingMain = item.role === '主菜' && tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood'].includes(tag));
+
+  return (
+    (namedStaple ? 160 : 0) +
+    (specificStaple ? 160 : 0) +
+    (genreDish ? 160 : 0) +
+    (genreDish && item.role === '主菜' ? 110 : 0) +
+    (fillingMain ? 70 : 0) +
+    (item.role === '主菜' ? 30 : 0) -
+    (weakMain ? 180 : 0)
+  );
+}
+
+function isNamedStapleDish(name: string) {
+  if (/^白米\d+(?:\.\d+)?g$/.test(name)) return false;
+  if (/^スーパー大麦入りご飯\d+(?:\.\d+)?g$/.test(name)) return false;
+  return ['パスタ', 'ラーメン', '中華麺', 'うどん', 'そば', '素麺', '冷やし中華', '丼', 'ビビンバ', '炒飯', 'カレー', '焼肉', 'プルコギ'].some((term) =>
+    name.includes(term),
+  );
 }
 
 function hasRole(items: MealItem[], role: string) {
