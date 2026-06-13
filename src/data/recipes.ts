@@ -1040,7 +1040,7 @@ function inferRecipeMealStyle(id: string, name: string, tags: string[]): Recipe[
   if (tags.includes('curry') || id.includes('curry') || name.includes('カレー')) return 'curry';
   if (
     id.includes('don') ||
-    id.includes('bowl') ||
+    (id.includes('rice-bowl') && id !== 'white-rice-bowl') ||
     id.includes('bibimbap') ||
     id.includes('fried-rice') ||
     id.includes('porridge') ||

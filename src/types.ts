@@ -112,6 +112,7 @@ export interface MealCandidate {
   diff: MacroDiffProfile;
   score: number;
   fitScore: number;
+  mealSatisfactionScore: number;
   reason: string;
   caution: string;
 }

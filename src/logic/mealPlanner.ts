@@ -193,8 +193,10 @@ function buildTemplateCandidates(
           const tunedItems = tuneWhiteRiceServing(withExtra, input);
           const totals = sumMacros(tunedItems.map((item) => item.macros));
           const diff = diffMacros(totals, input);
-          const fitScore = calculateFitScore(diff);
-          const score = scoreMeal(template, tunedItems, totals, diff, input, intent, fitScore);
+          const macroFitScore = calculateFitScore(diff);
+          const mealSatisfactionScore = calculateMealSatisfactionScore(tunedItems, intent);
+          const fitScore = calculateCompositeFitScore(macroFitScore, mealSatisfactionScore);
+          const score = scoreMeal(template, tunedItems, totals, diff, input, intent, macroFitScore);
 
           candidates.push({
             id: `${template.id}-${selected.map((recipe) => recipe.id).join('-')}`,
@@ -206,6 +208,7 @@ function buildTemplateCandidates(
             diff,
             score,
             fitScore,
+            mealSatisfactionScore,
             reason: buildMealReason(tunedItems, totals, input, intent),
             caution: buildMealCaution(diff, input),
           });
@@ -989,6 +992,78 @@ function calculateFitScore(diff: MacroDiffProfile) {
   if (kcalGap >= 150) return Math.min(rawScore, 80);
   if (kcalGap >= 100) return Math.min(rawScore, 90);
   return rawScore;
+}
+
+function calculateCompositeFitScore(macroFitScore: number, mealSatisfactionScore: number) {
+  const blended = Math.round(macroFitScore * 0.82 + mealSatisfactionScore * 0.18);
+  if (mealSatisfactionScore < 35) return Math.min(blended, 80);
+  if (mealSatisfactionScore < 45) return Math.min(blended, 85);
+  return Math.max(1, Math.min(100, blended));
+}
+
+function calculateMealSatisfactionScore(items: MealItem[], intent: FreeTextIntent) {
+  const staple = items.find((item) => item.role === '主食');
+  const main = items.find((item) => item.role === '主菜');
+  const tags = items.flatMap((item) => item.recipe.tags);
+  const hasOneDish = Boolean(staple && isOneDishRecipe(staple.recipe));
+  const namedStaple = Boolean(staple && isNamedStapleDish(staple.recipe.name));
+  const meaningfulMain = Boolean(main && isMeaningfulMainDish(main));
+  const weakMain = Boolean(main && isWeakMainDish(main));
+  const weakItemCount = items.filter(isWeakStandaloneItem).length;
+
+  let score = 55;
+  if (hasOneDish) score += 24;
+  if (namedStaple) score += 14;
+  if (meaningfulMain) score += 24;
+  if (hasFillingProteinItem(staple ?? main ?? items[0])) score += 8;
+  if (hasRole(items, '副菜')) score += 5;
+  if (hasRole(items, '汁物')) score += 4;
+  if (tags.includes('satisfying')) score += 8;
+  if (matchesIntentGenre(tags, intent)) score += 12;
+
+  if (!hasOneDish && !main) score -= 26;
+  if (!hasOneDish && main && !meaningfulMain) score -= 16;
+  if (weakMain) score -= 24;
+  if (weakItemCount >= 2 && !hasOneDish && !meaningfulMain) score -= 18;
+  if (hasLightSupplementOnly(items) && !hasOneDish && !meaningfulMain) score -= 10;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function isMeaningfulMainDish(item: MealItem) {
+  if (isWeakMainDish(item)) return false;
+  const tags = item.recipe.tags;
+  const name = item.recipe.name;
+  return (
+    tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood', 'yakiniku', 'curry', 'korean', 'chinese', 'western', 'satisfying'].includes(tag)) ||
+    ['焼き', '炒め', '照り', '生姜', 'プルコギ', 'タッカルビ', 'ハンバーグ', '麻婆', '回鍋肉', '青椒肉絲', '塩焼き'].some((term) => name.includes(term))
+  );
+}
+
+function isWeakMainDish(item: MealItem) {
+  const name = item.recipe.name;
+  return ['冷奴', 'ゆで卵', '湯豆腐', '納豆', 'プロテイン', 'ヨーグルト', 'オイコス'].some((term) => name.includes(term));
+}
+
+function isWeakStandaloneItem(item: MealItem) {
+  const name = item.recipe.name;
+  return ['冷奴', 'ゆで卵', '納豆', 'めかぶ', 'ヨーグルト', 'オイコス', 'プロテイン'].some((term) => name.includes(term));
+}
+
+function hasLightSupplementOnly(items: MealItem[]) {
+  return items.some((item) => ['dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(item.recipe.category));
+}
+
+function matchesIntentGenre(tags: string[], intent: FreeTextIntent) {
+  return (
+    (intent.moods.includes('korean') && tags.includes('korean')) ||
+    (intent.moods.includes('chinese') && tags.includes('chinese')) ||
+    (intent.moods.includes('pasta') && tags.includes('pasta')) ||
+    (intent.moods.includes('curry') && tags.includes('curry')) ||
+    (intent.moods.includes('ramen') && tags.includes('ramen')) ||
+    (intent.moods.includes('yakiniku') && tags.includes('yakiniku')) ||
+    (intent.moods.includes('hearty') && (tags.includes('satisfying') || tags.some((tag) => ['beef', 'pork', 'chicken'].includes(tag))))
+  );
 }
 
 function classifyCandidate(template: MealTemplate, items: MealItem[], input: MealInput) {
