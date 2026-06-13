@@ -206,8 +206,8 @@ function buildTemplateCandidates(
             diff,
             score,
             fitScore,
-            reason: template.reason,
-            caution: template.caution,
+            reason: buildMealReason(tunedItems, totals, input, intent),
+            caution: buildMealCaution(diff, input),
           });
         }
       }
@@ -1064,6 +1064,92 @@ function isNamedStapleDish(name: string) {
   return ['パスタ', 'ラーメン', '中華麺', 'うどん', 'そば', '素麺', '冷やし中華', '丼', 'ビビンバ', '炒飯', 'カレー', '焼肉', 'プルコギ'].some((term) =>
     name.includes(term),
   );
+}
+
+function buildMealReason(items: MealItem[], totals: MacroProfile, input: MealInput, intent: FreeTextIntent) {
+  const staple = items.find((item) => item.role === '主食');
+  const main = items.find((item) => item.role === '主菜');
+  const side = items.find((item) => item.role === '副菜');
+  const soup = items.find((item) => item.role === '汁物');
+  const primary = pickRepresentativeMealItem(items) ?? staple ?? main;
+  const primaryName = primary?.recipe.name ?? 'この献立';
+  const tags = items.flatMap((item) => item.recipe.tags);
+  const oneDishStyle = staple?.recipe.mealStyle;
+
+  const firstSentence =
+    oneDishStyle === 'pasta'
+      ? `${primaryName}を主役にしながら、不足しやすいタンパク質を補いやすい構成です。`
+      : oneDishStyle === 'curry'
+        ? `${primaryName}を中心に、カレーの満足感を残しつつPFCに寄せた献立です。`
+        : oneDishStyle === 'noodle'
+          ? `${primaryName}を中心に構成した一皿完結型の献立です。`
+          : oneDishStyle === 'bowl'
+            ? `${primaryName}を主役にし、副菜と汁物で栄養バランスを補っています。`
+            : intent.moods.includes('korean') || tags.includes('korean')
+              ? `韓国料理の満足感を残しながら、${primaryName}を中心にPFCへ寄せています。`
+              : intent.moods.includes('hearty')
+                ? `${primaryName}を中心に、食べ応えとPFCバランスを両立しやすい献立です。`
+                : intent.moods.includes('light')
+                  ? `${primaryName}を中心に、脂質を抑えつつさっぱり食べやすい構成です。`
+                  : `${primaryName}を中心に、指定したPFCへ近づけるよう組み合わせています。`;
+
+  const macroNotes: string[] = [];
+  if (hasMacroTarget(input, 'protein')) {
+    macroNotes.push(totals.protein >= input.protein * 0.95 ? 'タンパク質を確保しやすく' : 'タンパク質の不足を抑え');
+  }
+  if (hasMacroTarget(input, 'fat')) {
+    macroNotes.push(totals.fat <= input.fat + Math.max(2, input.fat * 0.15) ? '脂質は目標に収まりやすく' : '脂質の上振れを小さくし');
+  }
+  if (hasMacroTarget(input, 'kcal')) {
+    macroNotes.push(Math.abs(totals.kcal - input.kcal) <= Math.max(50, input.kcal * 0.08) ? 'カロリーも近い範囲に収めています' : 'カロリー差が大きくなりすぎない候補を選んでいます');
+  }
+
+  const supportNames = [main, side, soup]
+    .filter((item): item is MealItem => Boolean(item && item !== primary))
+    .map((item) => item.recipe.name)
+    .slice(0, 2);
+  const supportText =
+    supportNames.length > 0
+      ? `${supportNames.join('、')}を合わせて、${macroNotes.length > 0 ? macroNotes.join('、') : '食事全体を整えています'}。`
+      : `${macroNotes.length > 0 ? macroNotes.join('、') : '食事全体のまとまりを優先しています'}。`;
+
+  return `${firstSentence}\n${supportText}`;
+}
+
+function buildMealCaution(diff: MacroDiffProfile, input: MealInput) {
+  const specifiedKeys = macroKeys.filter((key) => hasMacroTarget(input, key));
+  if (specifiedKeys.length === 0) return 'PFC目標が未指定のため、分量と食べやすさを優先した目安の提案です。';
+
+  const entries = specifiedKeys.map((key) => {
+    const value = diff[key] ?? 0;
+    const target = input[key] ?? 0;
+    const tolerance = key === 'kcal' ? Math.max(30, Math.abs(target) * 0.05) : Math.max(2, Math.abs(target) * 0.05);
+    const severity = Math.abs(value) / tolerance;
+    return { key, value, tolerance, severity };
+  });
+
+  if (entries.every((entry) => Math.abs(entry.value) <= entry.tolerance)) {
+    return '目標値に非常に近い献立です。細かい差は調味料や商品差で変わるため、実際の表示も確認してください。';
+  }
+
+  const entry = entries.sort((a, b) => b.severity - a.severity)[0];
+  const label = macroLabel(entry.key);
+  const unit = entry.key === 'kcal' ? 'kcal' : 'g';
+  const amount = Math.abs(entry.value);
+  const rounded = Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(1);
+  const direction = entry.value > 0 ? '高め' : '少なめ';
+  const degree = entry.severity >= 3 ? '大きく' : entry.severity >= 1.8 ? 'やや' : '';
+  return `${label}が目標より${degree}${rounded}${unit}${direction}です。気になる場合は、主食量や脂質の多い食材を少し調整してください。`;
+}
+
+function macroLabel(key: MacroKey) {
+  const labels: Record<MacroKey, string> = {
+    kcal: 'カロリー',
+    protein: 'タンパク質',
+    fat: '脂質',
+    carb: '炭水化物',
+  };
+  return labels[key];
 }
 
 function hasRole(items: MealItem[], role: string) {
