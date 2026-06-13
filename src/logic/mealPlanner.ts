@@ -141,7 +141,10 @@ export function createMealCandidates(
 ): MealCandidate[] {
   const foodMap = new Map(foods.map((food) => [food.id, food]));
   const intent = buildFreeTextIntent(freeTextTerms);
-  const recipePool = [...recipes, ...createUserFoodRecipes(foods)].filter((recipe) => isUsableRecipe(recipe, foodMap));
+  const baseRecipePool = [...recipes, ...createUserFoodRecipes(foods)].filter((recipe) => isUsableRecipe(recipe, foodMap));
+  const recipePool = [...baseRecipePool, ...createDerivedRecipes(baseRecipePool, foodMap)].filter((recipe) =>
+    isUsableRecipe(recipe, foodMap),
+  );
   const candidates = mealTemplates.flatMap((template) => buildTemplateCandidates(template, input, foodMap, recipePool, intent));
   const viableCandidates = candidates
     .filter((candidate) => isNaturalMeal(candidate.items))
@@ -577,6 +580,13 @@ const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
     penaltyTerms: ['納豆ご飯', '白米', '冷奴'],
   },
   {
+    mood: 'yakisoba',
+    keywords: ['焼きそば', 'やきそば', 'ヤキソバ'],
+    tags: ['yakisoba', 'noodle', 'chinese', 'satisfying'],
+    includeTerms: ['焼きそば', '中華麺'],
+    penaltyTerms: ['白米', '納豆ご飯', '冷奴', 'ヨーグルト', 'オイコス'],
+  },
+  {
     mood: 'rice-bowl',
     keywords: ['丼', 'どんぶり', '親子丼', '牛丼', '焼肉丼', 'ビビンバ', '炒飯', 'チャーハン', '雑炊', 'お茶漬け', 'ご飯', 'ごはん'],
     tags: ['white-rice', 'rice', 'satisfying', 'japanese', 'korean', 'chinese'],
@@ -727,11 +737,12 @@ function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTe
       (tags.includes('satisfying') ? 120 : 0)
     : 0;
   const pastaGate = intent.moods.includes('pasta') && !tags.includes('pasta') ? -900 : 0;
+  const yakisobaGate = intent.moods.includes('yakisoba') && !tags.includes('yakisoba') ? -900 : 0;
   const koreanGate = intent.moods.includes('korean') && !tags.includes('korean') && !tags.includes('kimchi') ? -620 : 0;
   const chineseGate = intent.moods.includes('chinese') && !tags.includes('chinese') ? -620 : 0;
   const lightBonus = intent.moods.includes('light') ? Math.max(0, 120 - totals.fat * 5) : 0;
 
-  return tagScore + includeScore + heartyBonus + lightBonus - penalty + pastaGate + koreanGate + chineseGate;
+  return tagScore + includeScore + heartyBonus + lightBonus - penalty + pastaGate + yakisobaGate + koreanGate + chineseGate;
 }
 
 function recipeSearchText(recipe: Recipe, foodMap: Map<string, Food>) {
@@ -780,6 +791,7 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'soba',
     'somen',
     'hiyashi-chuka',
+    'yakisoba',
     'korean',
     'chinese',
     'rice-bowl',
@@ -831,6 +843,8 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
       return hasTerm(['素麺', 'そうめん']);
     case 'hiyashi-chuka':
       return hasTerm(['冷やし中華']);
+    case 'yakisoba':
+      return hasPrimaryTag(['yakisoba']) || hasPrimaryTerm(['焼きそば']);
     case 'korean':
       return hasPrimaryTag(['korean', 'kimchi']) || hasPrimaryTerm(['韓国', 'キムチ', 'チゲ', 'スンドゥブ', 'ビビンバ', 'タッカルビ', 'ユッケジャン']);
     case 'chinese':
@@ -1061,6 +1075,7 @@ function matchesIntentGenre(tags: string[], intent: FreeTextIntent) {
     (intent.moods.includes('pasta') && tags.includes('pasta')) ||
     (intent.moods.includes('curry') && tags.includes('curry')) ||
     (intent.moods.includes('ramen') && tags.includes('ramen')) ||
+    (intent.moods.includes('yakisoba') && tags.includes('yakisoba')) ||
     (intent.moods.includes('yakiniku') && tags.includes('yakiniku')) ||
     (intent.moods.includes('hearty') && (tags.includes('satisfying') || tags.some((tag) => ['beef', 'pork', 'chicken'].includes(tag))))
   );
@@ -1118,8 +1133,8 @@ function representativeDishScore(item: MealItem) {
   const tags = item.recipe.tags;
   const weakMain = item.role === '主菜' && ['冷奴', 'ゆで卵', 'プロテイン', '湯豆腐', '補助'].some((term) => name.includes(term));
   const namedStaple = item.role === '主食' && isNamedStapleDish(name);
-  const specificStaple = item.role === '主食' && ['パスタ', 'ラーメン', '中華そば', '中華麺', 'カレー', '焼肉'].some((term) => name.includes(term));
-  const genreDish = tags.some((tag) => ['ramen', 'pasta', 'curry', 'yakiniku', 'korean', 'chinese'].includes(tag));
+  const specificStaple = item.role === '主食' && ['パスタ', 'ラーメン', '中華そば', '中華麺', '焼きそば', 'カレー', '焼肉'].some((term) => name.includes(term));
+  const genreDish = tags.some((tag) => ['ramen', 'pasta', 'curry', 'yakisoba', 'yakiniku', 'korean', 'chinese'].includes(tag));
   const fillingMain = item.role === '主菜' && tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood'].includes(tag));
 
   return (
@@ -1136,7 +1151,7 @@ function representativeDishScore(item: MealItem) {
 function isNamedStapleDish(name: string) {
   if (/^白米\d+(?:\.\d+)?g$/.test(name)) return false;
   if (/^スーパー大麦入りご飯\d+(?:\.\d+)?g$/.test(name)) return false;
-  return ['パスタ', 'ラーメン', '中華麺', 'うどん', 'そば', '素麺', '冷やし中華', '丼', 'ビビンバ', '炒飯', 'カレー', '焼肉', 'プルコギ'].some((term) =>
+  return ['パスタ', 'ラーメン', '中華麺', '焼きそば', 'うどん', 'そば', '素麺', '冷やし中華', '丼', 'ビビンバ', '炒飯', 'カレー', '焼肉', 'プルコギ'].some((term) =>
     name.includes(term),
   );
 }
@@ -1335,6 +1350,170 @@ function getGeneratedRecipeName(food: Food) {
 function getGeneratedMealTiming(food: Food): Recipe['mealTiming'] {
   if (['dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(food.category)) return ['snack'];
   return food.mealTiming.length > 0 ? food.mealTiming.filter((timing) => timing !== 'snack') : ['breakfast', 'lunch', 'dinner'];
+}
+
+const safeDerivedProteinFoodIds = [
+  'chicken-breast',
+  'sasami',
+  'lean-beef',
+  'pork-fillet',
+  'canned-tuna',
+  'salmon',
+  'mackerel-can',
+  'tuna-sashimi',
+  'egg',
+  'firm-tofu',
+  'silken-tofu',
+];
+
+const unsafeDerivedRecipeTerms = ['冷奴', 'ゆで卵', 'めかぶ', 'ヨーグルト', 'オイコス', 'プロテイン', '湯豆腐'];
+
+function createDerivedRecipes(recipes: Recipe[], foodMap: Map<string, Food>): Recipe[] {
+  const existingIds = new Set(recipes.map((recipe) => recipe.id));
+  const existingNames = new Set(recipes.map((recipe) => recipe.name));
+  const safeMains = recipes.filter((recipe) => isSafeDerivedMainRecipe(recipe, foodMap));
+  const derived: Recipe[] = [];
+
+  const add = (recipe: Recipe) => {
+    if (existingIds.has(recipe.id) || existingNames.has(recipe.name) || derived.some((item) => item.id === recipe.id || item.name === recipe.name)) return;
+    if (!isUsableRecipe(recipe, foodMap)) return;
+    derived.push(recipe);
+  };
+
+  safeMains.slice(0, 18).forEach((main) => add(createDerivedBowlRecipe(main)));
+  safeMains.filter(isPastaFriendlyMain).slice(0, 10).forEach((main) => add(createDerivedPastaRecipe(main)));
+  safeMains.filter(isNoodleFriendlyMain).slice(0, 8).forEach((main) => {
+    add(createDerivedUdonRecipe(main));
+    add(createDerivedSobaRecipe(main));
+  });
+  safeMains.filter(isYakisobaFriendlyMain).slice(0, 8).forEach((main) => add(createDerivedYakisobaRecipe(main)));
+
+  return derived;
+}
+
+function isSafeDerivedMainRecipe(recipe: Recipe, foodMap: Map<string, Food>) {
+  if (recipe.category !== 'main') return false;
+  if (unsafeDerivedRecipeTerms.some((term) => recipe.name.includes(term))) return false;
+  const foods = recipe.ingredients.map((ingredient) => foodMap.get(ingredient.foodId)).filter((food): food is Food => Boolean(food));
+  const hasSafeProtein = recipe.ingredients.some((ingredient) => safeDerivedProteinFoodIds.includes(ingredient.foodId));
+  const hasSafeProteinTag = recipe.tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood', 'tofu', 'egg'].includes(tag));
+  const onlyLightItems = foods.every((food) => ['side', 'soup', 'dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(food.category));
+  return (hasSafeProtein || hasSafeProteinTag) && !onlyLightItems;
+}
+
+function baseDerivedDishName(recipe: Recipe) {
+  return recipe.name
+    .replace(/定食用/g, '')
+    .replace(/プレート/g, '')
+    .replace(/主菜/g, '')
+    .replace(/の具風/g, '')
+    .replace(/の具/g, '')
+    .replace(/風$/g, '')
+    .trim();
+}
+
+function derivedRecipe(
+  source: Recipe,
+  style: NonNullable<Recipe['mealStyle']>,
+  idSuffix: string,
+  name: string,
+  ingredients: Recipe['ingredients'],
+  extraTags: string[],
+  description: string,
+): Recipe {
+  return {
+    id: `derived-${source.id}-${idSuffix}`,
+    name,
+    category: 'staple',
+    mealStyle: style,
+    ingredients,
+    tags: unique([...source.tags, ...extraTags, 'derived', 'satisfying']),
+    mealTiming: source.mealTiming.filter((timing) => timing !== 'breakfast' && timing !== 'snack').length > 0
+      ? source.mealTiming.filter((timing) => timing !== 'breakfast' && timing !== 'snack')
+      : ['lunch', 'dinner'],
+    description,
+    cookingTime: Math.min(25, source.cookingTime + 5),
+    difficulty: source.difficulty,
+    recipeUrl: '',
+  };
+}
+
+function createDerivedBowlRecipe(main: Recipe): Recipe {
+  const baseName = baseDerivedDishName(main).replace(/丼$/g, '');
+  return derivedRecipe(
+    main,
+    'bowl',
+    'bowl',
+    `${baseName}丼`,
+    [{ foodId: 'white-rice', serving: 170 }, ...main.ingredients],
+    ['white-rice', 'rice', 'rice-bowl'],
+    `${baseName}をご飯にのせた一皿完結型の丼です。`,
+  );
+}
+
+function createDerivedPastaRecipe(main: Recipe): Recipe {
+  const baseName = baseDerivedDishName(main).replace(/パスタ$/g, '');
+  const isJapanese = main.tags.some((tag) => ['japanese', 'fish'].includes(tag));
+  return derivedRecipe(
+    main,
+    'pasta',
+    'pasta',
+    `${baseName}${isJapanese ? '和風' : ''}パスタ`,
+    [{ foodId: 'spaghetti', serving: 100 }, ...main.ingredients],
+    ['pasta', isJapanese ? 'japanese' : 'western'],
+    `${baseName}を乾麺100gのスパゲッティに合わせた派生パスタです。`,
+  );
+}
+
+function createDerivedUdonRecipe(main: Recipe): Recipe {
+  const baseName = baseDerivedDishName(main).replace(/うどん$/g, '');
+  return derivedRecipe(
+    main,
+    'noodle',
+    'udon',
+    `${baseName}うどん`,
+    [{ foodId: 'udon', serving: 1 }, ...main.ingredients, { foodId: 'mentsuyu', serving: 1 }],
+    ['noodle', 'japanese', 'udon'],
+    `${baseName}をうどんに合わせた温かい麺メニューです。`,
+  );
+}
+
+function createDerivedSobaRecipe(main: Recipe): Recipe {
+  const baseName = baseDerivedDishName(main).replace(/そば$/g, '');
+  return derivedRecipe(
+    main,
+    'noodle',
+    'soba',
+    `${baseName}そば`,
+    [{ foodId: 'soba', serving: 1 }, ...main.ingredients, { foodId: 'mentsuyu', serving: 1 }],
+    ['noodle', 'japanese', 'soba'],
+    `${baseName}をそばに合わせた派生麺メニューです。`,
+  );
+}
+
+function createDerivedYakisobaRecipe(main: Recipe): Recipe {
+  const baseName = baseDerivedDishName(main).replace(/焼きそば$/g, '');
+  return derivedRecipe(
+    main,
+    'noodle',
+    'yakisoba',
+    `${baseName}焼きそば`,
+    [{ foodId: 'chinese-noodles', serving: 1 }, ...main.ingredients, { foodId: 'cabbage', serving: 100 }, { foodId: 'chuno-sauce', serving: 1 }],
+    ['yakisoba', 'noodle', 'chinese'],
+    `${baseName}を中華麺と野菜に合わせた焼きそばです。`,
+  );
+}
+
+function isPastaFriendlyMain(recipe: Recipe) {
+  return recipe.tags.some((tag) => ['chicken', 'fish', 'seafood'].includes(tag)) || recipe.ingredients.some((ingredient) => ingredient.foodId === 'canned-tuna');
+}
+
+function isNoodleFriendlyMain(recipe: Recipe) {
+  return recipe.tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood', 'egg'].includes(tag));
+}
+
+function isYakisobaFriendlyMain(recipe: Recipe) {
+  return recipe.tags.some((tag) => ['chicken', 'pork', 'beef', 'seafood'].includes(tag));
 }
 
 function isUsableRecipe(recipe: Recipe, foodMap: Map<string, Food>) {
