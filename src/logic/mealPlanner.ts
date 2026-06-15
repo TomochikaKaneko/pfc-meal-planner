@@ -34,6 +34,17 @@ type FreeTextIntent = {
   penaltyTerms: string[];
   moods: string[];
 };
+type FoodStyle =
+  | 'rice'
+  | 'bowl'
+  | 'seafoodBowl'
+  | 'setMeal'
+  | 'sideDish'
+  | 'pasta'
+  | 'yakisoba'
+  | 'ramen'
+  | 'udon'
+  | 'soba';
 
 const mealTemplates: MealTemplate[] = [
   {
@@ -184,6 +195,40 @@ const disallowedBowlTerms = [
   'ツナ水煮',
   'サバ缶',
 ];
+const foodStyleCompatibility: Record<string, Partial<Record<FoodStyle, number>>> = {
+  natto: { rice: 100, bowl: 90, soba: 95, udon: 80, pasta: 75, yakisoba: 10, ramen: 5, setMeal: 80, sideDish: 85 },
+  mekabu: { rice: 80, bowl: 70, soba: 70, udon: 55, pasta: 10, yakisoba: 0, ramen: 0, setMeal: 70, sideDish: 100 },
+  'onsen-egg': { rice: 90, bowl: 95, soba: 90, udon: 90, pasta: 45, yakisoba: 35, ramen: 70, setMeal: 75, sideDish: 45 },
+  'boiled-egg': { rice: 45, bowl: 45, soba: 35, udon: 40, pasta: 35, yakisoba: 35, ramen: 85, setMeal: 65, sideDish: 70 },
+  egg: { rice: 80, bowl: 90, soba: 80, udon: 90, pasta: 75, yakisoba: 80, ramen: 85, setMeal: 80, sideDish: 65 },
+  'silken-tofu': { rice: 45, bowl: 25, soba: 25, udon: 35, pasta: 5, yakisoba: 0, ramen: 10, setMeal: 85, sideDish: 95 },
+  'firm-tofu': { rice: 55, bowl: 45, soba: 20, udon: 35, pasta: 5, yakisoba: 10, ramen: 15, setMeal: 90, sideDish: 85 },
+  oikos: { rice: 0, bowl: 0, soba: 0, udon: 0, pasta: 0, yakisoba: 0, ramen: 0, setMeal: 20, sideDish: 20 },
+  'greek-yogurt': { rice: 0, bowl: 0, soba: 0, udon: 0, pasta: 0, yakisoba: 0, ramen: 0, setMeal: 20, sideDish: 25 },
+  'fat-free-yogurt': { rice: 0, bowl: 0, soba: 0, udon: 0, pasta: 0, yakisoba: 0, ramen: 0, setMeal: 20, sideDish: 25 },
+  protein: { rice: 0, bowl: 0, soba: 0, udon: 0, pasta: 0, yakisoba: 0, ramen: 0, setMeal: 20, sideDish: 20 },
+  'canned-tuna': { rice: 60, bowl: 30, soba: 30, udon: 35, pasta: 90, yakisoba: 45, ramen: 15, setMeal: 70, sideDish: 85 },
+  'mackerel-can': { rice: 75, bowl: 25, soba: 15, udon: 20, pasta: 25, yakisoba: 10, ramen: 10, setMeal: 85, sideDish: 65 },
+  'chicken-breast': { rice: 90, bowl: 90, pasta: 85, yakisoba: 85, ramen: 85, udon: 80, soba: 70, setMeal: 100, sideDish: 60 },
+  sasami: { rice: 70, bowl: 55, pasta: 75, yakisoba: 75, ramen: 65, udon: 80, soba: 70, setMeal: 90, sideDish: 75 },
+  'pork-fillet': { rice: 95, bowl: 95, pasta: 65, yakisoba: 90, ramen: 75, udon: 85, soba: 75, setMeal: 100, sideDish: 55 },
+  'pork-shabu': { rice: 85, bowl: 75, pasta: 35, yakisoba: 75, ramen: 75, udon: 90, soba: 85, setMeal: 95, sideDish: 80 },
+  'lean-beef': { rice: 95, bowl: 100, pasta: 45, yakisoba: 85, ramen: 65, udon: 80, soba: 85, setMeal: 100, sideDish: 50 },
+  'beef-round': { rice: 95, bowl: 100, pasta: 45, yakisoba: 85, ramen: 65, udon: 80, soba: 85, setMeal: 100, sideDish: 50 },
+  salmon: { rice: 95, bowl: 80, seafoodBowl: 95, pasta: 90, yakisoba: 45, ramen: 35, udon: 45, soba: 55, setMeal: 100, sideDish: 55 },
+  'tuna-sashimi': { rice: 80, bowl: 45, seafoodBowl: 100, pasta: 0, yakisoba: 0, ramen: 0, udon: 0, soba: 0, setMeal: 100, sideDish: 65 },
+  bonito: { rice: 80, bowl: 45, seafoodBowl: 95, pasta: 0, yakisoba: 0, ramen: 0, udon: 0, soba: 0, setMeal: 100, sideDish: 65 },
+  'horse-mackerel': { rice: 85, bowl: 45, seafoodBowl: 90, pasta: 25, yakisoba: 20, ramen: 10, udon: 15, soba: 25, setMeal: 100, sideDish: 55 },
+  shrimp: { rice: 80, bowl: 85, seafoodBowl: 95, pasta: 90, yakisoba: 85, ramen: 85, udon: 70, soba: 60, setMeal: 90, sideDish: 75 },
+  'peeled-shrimp': { rice: 80, bowl: 85, seafoodBowl: 95, pasta: 90, yakisoba: 85, ramen: 85, udon: 70, soba: 60, setMeal: 90, sideDish: 75 },
+  'frozen-shrimp': { rice: 80, bowl: 85, seafoodBowl: 95, pasta: 90, yakisoba: 85, ramen: 85, udon: 70, soba: 60, setMeal: 90, sideDish: 75 },
+  squid: { rice: 80, bowl: 85, seafoodBowl: 95, pasta: 90, yakisoba: 90, ramen: 70, udon: 60, soba: 55, setMeal: 90, sideDish: 75 },
+  scallop: { rice: 80, bowl: 85, seafoodBowl: 100, pasta: 90, yakisoba: 75, ramen: 55, udon: 45, soba: 45, setMeal: 95, sideDish: 80 },
+  shirasu: { rice: 100, bowl: 95, seafoodBowl: 95, pasta: 80, yakisoba: 20, ramen: 10, udon: 20, soba: 55, setMeal: 85, sideDish: 80 },
+  tarako: { rice: 90, bowl: 85, seafoodBowl: 70, pasta: 95, yakisoba: 20, ramen: 10, udon: 30, soba: 30, setMeal: 80, sideDish: 70 },
+  mentaiko: { rice: 90, bowl: 85, seafoodBowl: 70, pasta: 95, yakisoba: 20, ramen: 10, udon: 30, soba: 30, setMeal: 80, sideDish: 70 },
+  'crab-stick': { rice: 75, bowl: 80, seafoodBowl: 75, pasta: 55, yakisoba: 65, ramen: 45, udon: 60, soba: 55, setMeal: 75, sideDish: 90 },
+};
 
 function hasMacroTarget<K extends MacroKey>(input: MealInput, key: K): input is MealInput & Record<K, number> {
   return typeof input[key] === 'number' && Number.isFinite(input[key]);
@@ -259,7 +304,8 @@ function buildTemplateCandidates(
           const diff = diffMacros(totals, input);
           const macroFitScore = calculateFitScore(diff);
           const mealSatisfactionScore = calculateMealSatisfactionScore(tunedItems, intent);
-          const fitScore = calculateCompositeFitScore(macroFitScore, mealSatisfactionScore);
+          const mealNaturalnessScore = calculateMealNaturalnessScore(tunedItems);
+          const fitScore = calculateCompositeFitScore(macroFitScore, mealSatisfactionScore, mealNaturalnessScore);
           const score = scoreMeal(template, tunedItems, totals, diff, input, intent, macroFitScore);
 
           candidates.push({
@@ -273,6 +319,7 @@ function buildTemplateCandidates(
             score,
             fitScore,
             mealSatisfactionScore,
+            mealNaturalnessScore,
             reason: buildMealReason(tunedItems, totals, input, intent),
             caution: buildMealCaution(diff, input),
           });
@@ -608,6 +655,13 @@ const canonicalFreeTextIntentRules: typeof freeTextIntentRules = [
 
 const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
   {
+    mood: 'natto',
+    keywords: ['\u7d0d\u8c46', '\u306a\u3063\u3068\u3046'],
+    tags: ['natto', 'japanese'],
+    includeTerms: ['\u7d0d\u8c46', '\u7d0d\u8c46\u3054\u98ef', '\u7d0d\u8c46\u305d\u3070', '\u7d0d\u8c46\u3046\u3069\u3093', '\u7d0d\u8c46\u30d1\u30b9\u30bf'],
+    penaltyTerms: ['\u713c\u304d\u305d\u3070', '\u30e9\u30fc\u30e1\u30f3', '\u30e8\u30fc\u30b0\u30eb\u30c8', '\u30aa\u30a4\u30b3\u30b9'],
+  },
+  {
     mood: 'meat',
     keywords: ['\u8089', '\u304a\u8089', '\u8089\u6599\u7406', '\u9d8f\u8089', '\u8c5a\u8089', '\u725b\u8089', '\u9d8f\u3080\u306d', '\u80f8\u8089', '\u3055\u3055\u307f', '\u8c5a\u30d2\u30ec', '\u725b\u8d64\u8eab'],
     tags: ['chicken', 'pork', 'beef', 'satisfying', 'high-protein'],
@@ -941,6 +995,7 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'somen',
     'hiyashi-chuka',
     'yakisoba',
+    'natto',
     'meat',
     'chinjao',
     'bulgogi',
@@ -1006,6 +1061,8 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
       return hasTerm(['冷やし中華']);
     case 'yakisoba':
       return hasPrimaryTag(['yakisoba']) || hasPrimaryTerm(['焼きそば']);
+    case 'natto':
+      return hasPrimaryTag(['natto']) || hasPrimaryTerm(['\u7d0d\u8c46', '\u306a\u3063\u3068\u3046']);
     case 'meat':
       return hasPrimaryTag(['chicken', 'pork', 'beef']) || hasPrimaryTerm(['\u9d8f\u3080\u306d', '\u80f8\u8089', '\u3055\u3055\u307f', '\u9d8f\u8089', '\u8c5a\u30d2\u30ec', '\u8c5a\u8089', '\u725b\u8d64\u8eab', '\u725b\u8089', '\u713c\u8089', '\u751f\u59dc\u713c\u304d', '\u30d7\u30eb\u30b3\u30ae', '\u9752\u6912\u8089\u7d72', '\u89aa\u5b50\u4e3c']);
     case 'chinjao':
@@ -1231,7 +1288,7 @@ function proteinIngredientKey(item: MealItem) {
 }
 
 function macroFitRank(candidate: MealCandidate) {
-  return candidate.score + candidate.fitScore * 22 - macroDistance(candidate.diff) * 0.35;
+  return candidate.score + candidate.fitScore * 22 + candidate.mealNaturalnessScore * 8 - macroDistance(candidate.diff) * 0.35;
 }
 
 function heartyMealShapeScore(items: MealItem[]) {
@@ -1318,10 +1375,12 @@ function calculateFitScore(diff: MacroDiffProfile) {
   return rawScore;
 }
 
-function calculateCompositeFitScore(macroFitScore: number, mealSatisfactionScore: number) {
-  const blended = Math.round(macroFitScore * 0.82 + mealSatisfactionScore * 0.18);
+function calculateCompositeFitScore(macroFitScore: number, mealSatisfactionScore: number, mealNaturalnessScore: number) {
+  const blended = Math.round(macroFitScore * 0.78 + mealSatisfactionScore * 0.14 + mealNaturalnessScore * 0.08);
   if (mealSatisfactionScore < 35) return Math.min(blended, 80);
   if (mealSatisfactionScore < 45) return Math.min(blended, 85);
+  if (mealNaturalnessScore < 35) return Math.min(blended, 72);
+  if (mealNaturalnessScore < 50) return Math.min(blended, 82);
   return Math.max(1, Math.min(100, blended));
 }
 
@@ -1356,7 +1415,17 @@ function calculateMealSatisfactionScore(items: MealItem[], intent: FreeTextInten
 }
 
 function mealNaturalnessPenalty(items: MealItem[]) {
-  return supplementGroupPenalty(items) + riceCompatibilityPenalty(items) + disallowedBowlPenalty(items);
+  return (
+    supplementGroupPenalty(items) +
+    riceCompatibilityPenalty(items) +
+    disallowedBowlPenalty(items) +
+    foodStyleCompatibilityPenalty(items) +
+    protagonistSuitabilityPenalty(items)
+  );
+}
+
+function calculateMealNaturalnessScore(items: MealItem[]) {
+  return Math.max(0, Math.min(100, Math.round(100 - mealNaturalnessPenalty(items) / 12)));
 }
 
 function supplementGroupPenalty(items: MealItem[]) {
@@ -1404,6 +1473,106 @@ function riceCompatibilityPenalty(items: MealItem[]) {
 
 function disallowedBowlPenalty(items: MealItem[]) {
   return items.some((item) => isDisallowedBowlRecipe(item.recipe)) ? 340 : 0;
+}
+
+function foodStyleCompatibilityPenalty(items: MealItem[]) {
+  return items.reduce((penalty, item) => {
+    const style = itemFoodStyle(item);
+    if (!style) return penalty;
+    const compatibility = itemStyleCompatibility(item, style);
+    if (compatibility >= 70) return penalty;
+    if (compatibility >= 45) return penalty + (70 - compatibility) * 4;
+    return penalty + (45 - compatibility) * 10 + 120;
+  }, 0);
+}
+
+function protagonistSuitabilityPenalty(items: MealItem[]) {
+  const primary = getPrimaryMealItem(items);
+  if (!primary) return 0;
+  const foodIds = primary.ingredients.map((ingredient) => ingredient.food.id);
+  const tags = primary.recipe.tags;
+  const hasStrongProtein = foodIds.some((id) =>
+    [
+      'chicken-breast',
+      'sasami',
+      'lean-beef',
+      'beef-round',
+      'pork-fillet',
+      'pork-shabu',
+      'salmon',
+      'tuna-sashimi',
+      'bonito',
+      'cod',
+      'horse-mackerel',
+      'yellowtail',
+      'shrimp',
+      'peeled-shrimp',
+      'frozen-shrimp',
+      'squid',
+      'scallop',
+    ].includes(id),
+  );
+  const hasStrongDishTag = tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood', 'yakiniku', 'korean', 'chinese', 'curry'].includes(tag));
+  if (hasStrongProtein || hasStrongDishTag || hasTerm(primary.recipe.name, riceFriendlyMainTerms)) return 0;
+  const supplementIds = ['mekabu', 'natto', 'onsen-egg', 'boiled-egg', 'silken-tofu', 'firm-tofu', 'oikos', 'greek-yogurt', 'fat-free-yogurt', 'protein', 'canned-tuna', 'mackerel-can'];
+  return foodIds.some((id) => supplementIds.includes(id)) ? 300 : 0;
+}
+
+function getPrimaryMealItem(items: MealItem[]) {
+  const staple = items.find((item) => item.role === '主食');
+  if (staple && isOneDishRecipe(staple.recipe)) return staple;
+  return items.find((item) => item.role === '主菜') ?? staple ?? items[0];
+}
+
+function itemFoodStyle(item: MealItem): FoodStyle | null {
+  const name = item.recipe.name;
+  const tags = item.recipe.tags;
+  if (tags.includes('yakisoba') || name.includes('焼きそば')) return 'yakisoba';
+  if (tags.includes('ramen') || name.includes('ラーメン') || name.includes('中華そば')) return 'ramen';
+  if (tags.includes('udon') || name.includes('うどん')) return 'udon';
+  if (tags.includes('soba') || name.includes('そば')) return 'soba';
+  if (tags.includes('pasta') || item.recipe.mealStyle === 'pasta' || name.includes('パスタ')) return 'pasta';
+  if (item.recipe.mealStyle === 'bowl' || name.includes('丼')) {
+    return tags.some((tag) => ['seafood', 'fish', 'sashimi'].includes(tag)) ? 'seafoodBowl' : 'bowl';
+  }
+  if (item.role === '副菜' || item.recipe.category === 'side') return 'sideDish';
+  if (item.role === '主菜' || item.recipe.category === 'main') return 'setMeal';
+  if (item.recipe.category === 'staple') return 'rice';
+  return null;
+}
+
+function itemStyleCompatibility(item: MealItem, style: FoodStyle) {
+  const explicitRecipeScore = recipeStyleCompatibility(item.recipe, style);
+  const scores = item.ingredients
+    .filter((ingredient) => ingredient.food.category !== 'seasoning' && ingredient.food.category !== 'staple')
+    .map((ingredient) => foodStyleCompatibility[ingredient.food.id]?.[style])
+    .filter((score): score is number => typeof score === 'number');
+  const foodScore = scores.length > 0 ? Math.min(...scores) : 75;
+  return Math.min(foodScore, explicitRecipeScore);
+}
+
+function recipeStyleCompatibility(recipe: Recipe, style: FoodStyle) {
+  const name = recipe.name;
+  if (name.includes('ポン酢') || name.includes('和え')) {
+    if (style === 'setMeal' || style === 'sideDish') return 95;
+    if (style === 'bowl') return 10;
+    if (style === 'yakisoba' || style === 'pasta') return 0;
+  }
+  if (name.includes('刺身')) {
+    if (style === 'setMeal' || style === 'seafoodBowl') return 100;
+    if (style === 'bowl') return 40;
+    if (style === 'pasta' || style === 'yakisoba' || style === 'ramen') return 0;
+  }
+  if (name.includes('焼肉') || name.includes('生姜焼き') || name.includes('プルコギ')) {
+    if (style === 'setMeal' || style === 'bowl') return 100;
+    if (style === 'yakisoba') return 80;
+  }
+  if (recipe.tags.some((tag) => ['seafood', 'shrimp', 'squid', 'scallop'].includes(tag))) {
+    if (style === 'setMeal' || style === 'seafoodBowl') return 100;
+    if (style === 'pasta') return 90;
+    if (style === 'yakisoba') return 80;
+  }
+  return 100;
 }
 
 function hasTerm(value: string, terms: string[]) {
@@ -1788,7 +1957,7 @@ function createDerivedRecipes(recipes: Recipe[], foodMap: Map<string, Food>): Re
     derived.push(recipe);
   };
 
-  safeMains.filter(isBowlFriendlyMain).slice(0, 18).forEach((main) => add(createDerivedBowlRecipe(main)));
+  safeMains.slice(0, 18).forEach((main) => add(createDerivedBowlRecipe(main)));
   safeMains.filter(isPastaFriendlyMain).slice(0, 10).forEach((main) => add(createDerivedPastaRecipe(main)));
   safeMains.filter(isNoodleFriendlyMain).slice(0, 8).forEach((main) => {
     add(createDerivedUdonRecipe(main));
@@ -1844,15 +2013,6 @@ function derivedRecipe(
     difficulty: source.difficulty,
     recipeUrl: '',
   };
-}
-
-function isBowlFriendlyMain(recipe: Recipe) {
-  const name = recipe.name;
-  if (hasTerm(name, disallowedBowlTerms)) return false;
-  if (hasTerm(name, allowedBowlTerms)) return true;
-  if (recipe.tags.includes('yakiniku')) return true;
-  if (recipe.tags.includes('korean') && name.includes('プルコギ')) return true;
-  return false;
 }
 
 function createDerivedBowlRecipe(main: Recipe): Recipe {

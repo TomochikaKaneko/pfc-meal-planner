@@ -113,6 +113,7 @@ export interface MealCandidate {
   score: number;
   fitScore: number;
   mealSatisfactionScore: number;
+  mealNaturalnessScore: number;
   reason: string;
   caution: string;
 }
