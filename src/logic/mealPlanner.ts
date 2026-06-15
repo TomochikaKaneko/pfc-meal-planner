@@ -128,6 +128,62 @@ const tagAliases: Record<ConditionTag, string[]> = {
 const macroKeys = ['kcal', 'protein', 'fat', 'carb'] as const;
 const MIN_RECOMMENDED_FIT_SCORE = 30;
 const RECIPE_POOL_SIZES = [16, 16, 16, 5] as const;
+const riceFriendlyMainTerms = [
+  '焼肉',
+  '生姜焼き',
+  '照り焼き',
+  'みそ焼き',
+  '味噌焼き',
+  '塩焼き',
+  '青椒肉絲',
+  '回鍋肉',
+  '麻婆豆腐',
+  'プルコギ',
+  'タッカルビ',
+  '親子丼',
+  '牛とじ',
+  '焼き魚',
+  'サバ味噌',
+  '鮭塩焼き',
+  '鮭みそ焼き',
+];
+const weakRiceMainTerms = ['ポン酢和え', '冷しゃぶ', 'ツナポン酢', 'めかぶ和え', '豆腐ポン酢', '笹かまポン酢', 'ツナ水煮'];
+const allowedBowlTerms = [
+  '親子丼',
+  '牛丼',
+  '豚丼',
+  '焼肉丼',
+  '海鮮丼',
+  'ネギトロ',
+  'しらす丼',
+  'ビビンバ',
+  '天津飯',
+  '中華丼',
+  '牛とじ丼',
+  '豚玉丼',
+  'かに玉',
+  'プルコギ丼',
+  '温玉焼肉丼',
+  '他人丼',
+  '木の葉丼',
+  'マグロ山かけ丼',
+  '漬けマグロ丼',
+];
+const disallowedBowlTerms = [
+  'ポン酢和え',
+  'ポン酢',
+  'みそ焼き',
+  '味噌焼き',
+  '塩焼き',
+  '照り焼き',
+  '青椒肉絲',
+  '野菜炒め',
+  'ヤンニョム',
+  '冷しゃぶ',
+  '刺身',
+  'ツナ水煮',
+  'サバ缶',
+];
 
 function hasMacroTarget<K extends MacroKey>(input: MealInput, key: K): input is MealInput & Record<K, number> {
   return typeof input[key] === 'number' && Number.isFinite(input[key]);
@@ -411,6 +467,7 @@ function scoreMeal(
       : -120;
   const templateScore = items.some((item) => item.recipe.tags.includes(template.id)) ? 12 : 0;
   const intentScore = scoreMealIntent(items, totals, intent) * getIntentWeight(fitScore);
+  const naturalnessPenalty = mealNaturalnessPenalty(items);
 
   return round1(
     kcalScore +
@@ -423,7 +480,8 @@ function scoreMeal(
       userFoodScore +
       structureScore +
       templateScore +
-      intentScore,
+      intentScore -
+      naturalnessPenalty,
   );
 }
 
@@ -1292,12 +1350,91 @@ function calculateMealSatisfactionScore(items: MealItem[], intent: FreeTextInten
   if (weakMain) score -= 24;
   if (weakItemCount >= 2 && !hasOneDish && !meaningfulMain) score -= 18;
   if (hasLightSupplementOnly(items) && !hasOneDish && !meaningfulMain) score -= 10;
+  score -= Math.min(38, Math.round(mealNaturalnessPenalty(items) / 18));
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+function mealNaturalnessPenalty(items: MealItem[]) {
+  return supplementGroupPenalty(items) + riceCompatibilityPenalty(items) + disallowedBowlPenalty(items);
+}
+
+function supplementGroupPenalty(items: MealItem[]) {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    for (const group of supplementGroupsForItem(item)) {
+      counts.set(group, (counts.get(group) ?? 0) + 1);
+    }
+  }
+  const groups = [...counts.values()];
+  const duplicateCount = groups.reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+  const uniqueGroupCount = groups.filter((count) => count > 0).length;
+  return duplicateCount * 180 + Math.max(0, uniqueGroupCount - 2) * 260;
+}
+
+function supplementGroupsForItem(item: MealItem) {
+  const groups = new Set<string>();
+  const foodIds = item.ingredients.map((ingredient) => ingredient.food.id);
+  const name = item.recipe.name;
+  if (foodIds.includes('natto') || name.includes('納豆')) groups.add('natto');
+  if (foodIds.includes('mekabu') || name.includes('めかぶ')) groups.add('mekabu');
+  if (foodIds.includes('onsen-egg') || foodIds.includes('boiled-egg') || foodIds.includes('egg-soup') || (item.recipe.category === 'main' && foodIds.includes('egg'))) groups.add('egg');
+  if (foodIds.includes('silken-tofu') || foodIds.includes('firm-tofu') || foodIds.includes('tofu-miso-soup') || name.includes('豆腐') || name.includes('冷奴') || name.includes('湯豆腐')) groups.add('tofu');
+  if (foodIds.some((id) => ['oikos', 'greek-yogurt', 'fat-free-yogurt'].includes(id)) || name.includes('ヨーグルト') || name.includes('オイコス')) {
+    groups.add('yogurt');
+  }
+  if (foodIds.includes('protein') || name.includes('プロテイン')) groups.add('protein');
+  if (foodIds.includes('canned-tuna') && isWeakStandaloneItem(item)) groups.add('canned-tuna');
+  if (foodIds.includes('mackerel-can') && isWeakStandaloneItem(item)) groups.add('canned-mackerel');
+  return groups;
+}
+
+function riceCompatibilityPenalty(items: MealItem[]) {
+  const staple = items.find((item) => item.recipe.category === 'staple');
+  const main = items.find((item) => item.recipe.category === 'main');
+  if (!staple?.ingredients.some((ingredient) => ingredient.food.id === 'white-rice')) return 0;
+  if (staple && isOneDishRecipe(staple.recipe)) {
+    return (isDisallowedBowlRecipe(staple.recipe) ? 260 : 0) + (main && isWeakRiceMainDish(main) ? 220 : 0);
+  }
+  if (!main) return 180;
+  if (isWeakRiceMainDish(main)) return 320;
+  if (!isRiceFriendlyMainDish(main) && isWeakStandaloneItem(main)) return 240;
+  return 0;
+}
+
+function disallowedBowlPenalty(items: MealItem[]) {
+  return items.some((item) => isDisallowedBowlRecipe(item.recipe)) ? 340 : 0;
+}
+
+function hasTerm(value: string, terms: string[]) {
+  return terms.some((term) => value.includes(term));
+}
+
+function isDisallowedBowlRecipe(recipe: Recipe) {
+  if (recipe.mealStyle !== 'bowl' && !recipe.name.includes('丼')) return false;
+  if (hasTerm(recipe.name, allowedBowlTerms)) return false;
+  return recipe.name.includes('丼') || hasTerm(recipe.name, disallowedBowlTerms);
+}
+
+function isRiceFriendlyMainDish(item: MealItem) {
+  const tags = item.recipe.tags;
+  return (
+    hasTerm(item.recipe.name, riceFriendlyMainTerms) ||
+    tags.some((tag) => ['yakiniku', 'korean', 'chinese', 'satisfying'].includes(tag)) ||
+    item.ingredients.some((ingredient) => ['salmon', 'mackerel-can', 'lean-beef', 'pork-fillet', 'chicken-breast'].includes(ingredient.food.id))
+  );
+}
+
+function isWeakRiceMainDish(item: MealItem) {
+  const weakFoodMain = item.recipe.category === 'main' && item.ingredients.some((ingredient) =>
+    ['silken-tofu', 'firm-tofu', 'canned-tuna', 'mackerel-can', 'mekabu', 'sasa-kamaboko', 'kamaboko', 'chikuwa'].includes(ingredient.food.id),
+  );
+  return hasTerm(item.recipe.name, weakRiceMainTerms) || (weakFoodMain && !isRiceFriendlyMainDish(item)) || (isWeakStandaloneItem(item) && !isRiceFriendlyMainDish(item));
+}
+
 function isMeaningfulMainDish(item: MealItem) {
   if (isWeakMainDish(item)) return false;
+  if (isWeakRiceMainDish(item)) return false;
   const tags = item.recipe.tags;
   const name = item.recipe.name;
   return (
@@ -1365,10 +1502,15 @@ function buildMealTitle(template: MealTemplate, items: MealItem[]) {
   const representative = pickRepresentativeMealItem(items);
   if (!representative) return template.title;
 
-  const name = representative.recipe.name;
+  const name = displayMealTitleName(representative.recipe);
   if (representative.role === '主食' && isNamedStapleDish(name)) return name;
   if (representative.role === '主菜') return `${name}定食`;
   return name;
+}
+
+function displayMealTitleName(recipe: Recipe) {
+  if (isDisallowedBowlRecipe(recipe)) return recipe.name.replace(/丼/g, '定食');
+  return recipe.name;
 }
 
 function pickRepresentativeMealItem(items: MealItem[]) {
@@ -1388,6 +1530,7 @@ function representativeDishScore(item: MealItem) {
   const specificStaple = item.role === '主食' && ['パスタ', 'ラーメン', '中華そば', '中華麺', '焼きそば', 'カレー', '焼肉'].some((term) => name.includes(term));
   const genreDish = tags.some((tag) => ['ramen', 'pasta', 'curry', 'yakisoba', 'yakiniku', 'korean', 'chinese'].includes(tag));
   const fillingMain = item.role === '主菜' && tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood'].includes(tag));
+  const disallowedBowl = isDisallowedBowlRecipe(item.recipe);
 
   return (
     (namedStaple ? 160 : 0) +
@@ -1396,7 +1539,8 @@ function representativeDishScore(item: MealItem) {
     (genreDish && item.role === '主菜' ? 110 : 0) +
     (fillingMain ? 70 : 0) +
     (item.role === '主菜' ? 30 : 0) -
-    (weakMain ? 180 : 0)
+    (weakMain ? 180 : 0) -
+    (disallowedBowl ? 260 : 0)
   );
 }
 
@@ -1644,7 +1788,7 @@ function createDerivedRecipes(recipes: Recipe[], foodMap: Map<string, Food>): Re
     derived.push(recipe);
   };
 
-  safeMains.slice(0, 18).forEach((main) => add(createDerivedBowlRecipe(main)));
+  safeMains.filter(isBowlFriendlyMain).slice(0, 18).forEach((main) => add(createDerivedBowlRecipe(main)));
   safeMains.filter(isPastaFriendlyMain).slice(0, 10).forEach((main) => add(createDerivedPastaRecipe(main)));
   safeMains.filter(isNoodleFriendlyMain).slice(0, 8).forEach((main) => {
     add(createDerivedUdonRecipe(main));
@@ -1700,6 +1844,15 @@ function derivedRecipe(
     difficulty: source.difficulty,
     recipeUrl: '',
   };
+}
+
+function isBowlFriendlyMain(recipe: Recipe) {
+  const name = recipe.name;
+  if (hasTerm(name, disallowedBowlTerms)) return false;
+  if (hasTerm(name, allowedBowlTerms)) return true;
+  if (recipe.tags.includes('yakiniku')) return true;
+  if (recipe.tags.includes('korean') && name.includes('プルコギ')) return true;
+  return false;
 }
 
 function createDerivedBowlRecipe(main: Recipe): Recipe {
