@@ -550,6 +550,13 @@ const canonicalFreeTextIntentRules: typeof freeTextIntentRules = [
 
 const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
   {
+    mood: 'meat',
+    keywords: ['\u8089', '\u304a\u8089', '\u8089\u6599\u7406', '\u9d8f\u8089', '\u8c5a\u8089', '\u725b\u8089', '\u9d8f\u3080\u306d', '\u80f8\u8089', '\u3055\u3055\u307f', '\u8c5a\u30d2\u30ec', '\u725b\u8d64\u8eab'],
+    tags: ['chicken', 'pork', 'beef', 'satisfying', 'high-protein'],
+    includeTerms: ['\u9d8f\u3080\u306d', '\u80f8\u8089', '\u3055\u3055\u307f', '\u9d8f\u8089', '\u8c5a\u30d2\u30ec', '\u8c5a\u8089', '\u725b\u8d64\u8eab', '\u725b\u8089', '\u713c\u8089', '\u751f\u59dc\u713c\u304d', '\u30d7\u30eb\u30b3\u30ae', '\u9752\u6912\u8089\u7d72', '\u89aa\u5b50\u4e3c'],
+    penaltyTerms: ['\u9b5a', '\u9bad', '\u30b5\u30d0', '\u30de\u30b0\u30ed', '\u8c46\u8150', '\u51b7\u5974', '\u30e8\u30fc\u30b0\u30eb\u30c8', '\u30aa\u30a4\u30b3\u30b9', '\u30d7\u30ed\u30c6\u30a4\u30f3'],
+  },
+  {
     mood: 'chinjao',
     keywords: ['\u9752\u6912\u8089\u7d72', '\u30c1\u30f3\u30b8\u30e3\u30aa\u30ed\u30fc\u30b9', '\u30c1\u30f3\u30b8\u30e3\u30aa\u30ed\u30fc\u30b9\u30fc'],
     tags: ['chinese', 'satisfying'],
@@ -822,9 +829,11 @@ function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTe
   const yakisobaGate = intent.moods.includes('yakisoba') && !tags.includes('yakisoba') ? -900 : 0;
   const koreanGate = intent.moods.includes('korean') && !tags.includes('korean') && !tags.includes('kimchi') ? -620 : 0;
   const chineseGate = intent.moods.includes('chinese') && !tags.includes('chinese') ? -620 : 0;
+  const meatGate = intent.moods.includes('meat') && !tags.some((tag) => ['chicken', 'pork', 'beef'].includes(tag)) ? -780 : 0;
+  const meatBonus = intent.moods.includes('meat') && tags.some((tag) => ['chicken', 'pork', 'beef'].includes(tag)) ? 180 : 0;
   const lightBonus = intent.moods.includes('light') ? Math.max(0, 120 - totals.fat * 5) : 0;
 
-  return tagScore + includeScore + heartyBonus + lightBonus - penalty + pastaGate + yakisobaGate + koreanGate + chineseGate;
+  return tagScore + includeScore + heartyBonus + meatBonus + lightBonus - penalty + pastaGate + yakisobaGate + koreanGate + chineseGate + meatGate;
 }
 
 function recipeSearchText(recipe: Recipe, foodMap: Map<string, Food>) {
@@ -874,6 +883,7 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'somen',
     'hiyashi-chuka',
     'yakisoba',
+    'meat',
     'chinjao',
     'bulgogi',
     'korean',
@@ -938,6 +948,8 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
       return hasTerm(['冷やし中華']);
     case 'yakisoba':
       return hasPrimaryTag(['yakisoba']) || hasPrimaryTerm(['焼きそば']);
+    case 'meat':
+      return hasPrimaryTag(['chicken', 'pork', 'beef']) || hasPrimaryTerm(['\u9d8f\u3080\u306d', '\u80f8\u8089', '\u3055\u3055\u307f', '\u9d8f\u8089', '\u8c5a\u30d2\u30ec', '\u8c5a\u8089', '\u725b\u8d64\u8eab', '\u725b\u8089', '\u713c\u8089', '\u751f\u59dc\u713c\u304d', '\u30d7\u30eb\u30b3\u30ae', '\u9752\u6912\u8089\u7d72', '\u89aa\u5b50\u4e3c']);
     case 'chinjao':
       return hasPrimaryTerm(['\u9752\u6912\u8089\u7d72', '\u30c1\u30f3\u30b8\u30e3\u30aa\u30ed\u30fc\u30b9', '\u30c1\u30f3\u30b8\u30e3\u30aa\u30ed\u30fc\u30b9\u30fc']);
     case 'bulgogi':

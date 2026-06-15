@@ -76,6 +76,8 @@ export function App() {
   const [isReplanModalOpen, setIsReplanModalOpen] = useState(false);
   const [draftMealInput, setDraftMealInput] = useState<MealInput>(() => loadMealInput());
   const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
+  const [savedReplanMealInput, setSavedReplanMealInput] = useState<MealInput | null>(null);
+  const [savedReplanFreeCondition, setSavedReplanFreeCondition] = useState<string | null>(null);
   const [hasSavedReplanCondition, setHasSavedReplanCondition] = useState(false);
   const [planningSource, setPlanningSource] = useState<'home' | 'replan' | null>(null);
   const [isTagSelectorOpen, setIsTagSelectorOpen] = useState(false);
@@ -161,12 +163,14 @@ export function App() {
     setResults(candidates);
     setHasGeneratedResults(true);
     setHasSavedReplanCondition(false);
+    setSavedReplanMealInput(null);
+    setSavedReplanFreeCondition(null);
     setTab('results');
   }
 
   function openReplanModal() {
-    setDraftMealInput(mealInput);
-    setDraftFreeCondition(freeCondition);
+    setDraftMealInput(savedReplanMealInput ?? mealInput);
+    setDraftFreeCondition(savedReplanFreeCondition ?? freeCondition);
     setIsReplanModalOpen(true);
   }
 
@@ -182,17 +186,21 @@ export function App() {
   }
 
   function saveReplanCondition() {
-    setMealInput(draftMealInput);
-    setFreeCondition(draftFreeCondition);
-    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(draftMealInput));
-    localStorage.setItem(FREE_CONDITION_KEY, draftFreeCondition);
+    const nextInput = { ...draftMealInput, tags: [...draftMealInput.tags] };
+    const nextFreeCondition = draftFreeCondition;
+    setMealInput(nextInput);
+    setFreeCondition(nextFreeCondition);
+    setSavedReplanMealInput(nextInput);
+    setSavedReplanFreeCondition(nextFreeCondition);
+    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(nextInput));
+    localStorage.setItem(FREE_CONDITION_KEY, nextFreeCondition);
     setHasSavedReplanCondition(true);
     setIsReplanModalOpen(false);
   }
 
   function executeSavedReplan() {
     if (!hasSavedReplanCondition || isPlanning) return;
-    startMealGeneration(mealInput, freeCondition, 'replan');
+    startMealGeneration(savedReplanMealInput ?? mealInput, savedReplanFreeCondition ?? freeCondition, 'replan');
   }
 
   function saveFood(event: FormEvent<HTMLFormElement>) {
