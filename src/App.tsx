@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BookOpen, ChefHat, CircleHelp, Home, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
@@ -82,6 +82,9 @@ export function App() {
   const [planningSource, setPlanningSource] = useState<'home' | 'replan' | null>(null);
   const [isTagSelectorOpen, setIsTagSelectorOpen] = useState(false);
   const [draftTags, setDraftTags] = useState<ConditionTag[]>([]);
+  const [selectedMeal, setSelectedMeal] = useState<MealCandidate | null>(null);
+  const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
+  const resultsTopRef = useRef<HTMLDivElement | null>(null);
   const isPlanning = planningSource !== null;
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
@@ -101,6 +104,15 @@ export function App() {
       Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
     setIsStandalone(standalone);
   }, []);
+
+  useEffect(() => {
+    if (!shouldScrollToResults || tab !== 'results') return;
+    const timerId = window.setTimeout(() => {
+      resultsTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setShouldScrollToResults(false);
+    }, 140);
+    return () => window.clearTimeout(timerId);
+  }, [hasGeneratedResults, results.length, shouldScrollToResults, tab]);
 
   function updateInput(key: MacroKey, rawValue: string) {
     const next = { ...mealInput, [key]: parseMacroValue(rawValue) };
@@ -162,6 +174,8 @@ export function App() {
     const candidates = createMealCandidates(safeInput, foods, undefined, parseFreeCondition(condition), excludedFoodIds);
     setResults(candidates);
     setHasGeneratedResults(true);
+    setSelectedMeal(null);
+    setShouldScrollToResults(true);
     setHasSavedReplanCondition(false);
     setSavedReplanMealInput(null);
     setSavedReplanFreeCondition(null);
@@ -352,6 +366,7 @@ export function App() {
 
         {tab === 'results' && (
           <section className="stack results-screen">
+            <div ref={resultsTopRef} className="results-anchor" aria-hidden="true" />
             <div className="section-title">
               <h2>提案結果</h2>
               <button className="text-button" type="button" onClick={() => setTab('home')}>
@@ -367,7 +382,7 @@ export function App() {
             {results.length === 0 ? (
               <NoResultState hasGenerated={hasGeneratedResults} freeCondition={freeCondition} excludedFoodCount={excludedFoodIds.length} />
             ) : (
-              results.map((meal, index) => <MealCard meal={meal} rank={index + 1} key={meal.id} />)
+              results.map((meal, index) => <MealCard meal={meal} rank={index + 1} key={meal.id} onOpen={() => setSelectedMeal(meal)} />)
             )}
             <div className="result-bottom-spacer" />
           </section>
@@ -608,6 +623,8 @@ export function App() {
           onBlurNumber={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
         />
       )}
+
+      {selectedMeal && <MealDetailModal meal={selectedMeal} onClose={() => setSelectedMeal(null)} />}
 
       <nav className="bottom-nav" aria-label="主要ナビゲーション">
         <NavButton active={tab === 'home'} icon={<Home size={20} />} label="ホーム" onClick={() => setTab('home')} />
@@ -952,9 +969,20 @@ function FreeConditionField({ embedded = false, value, onChange }: { embedded?: 
   return embedded ? <div className="free-condition-panel embedded">{content}</div> : <section className="panel free-condition-panel">{content}</section>;
 }
 
-function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
+function MealCard({ meal, rank, onOpen }: { meal: MealCandidate; rank: number; onOpen: () => void }) {
   return (
-    <article className="meal-card">
+    <article
+      className="meal-card tappable"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       <div className="meal-heading">
         <div>
           <p className="eyebrow">
@@ -1006,6 +1034,124 @@ function MealCard({ meal, rank }: { meal: MealCandidate; rank: number }) {
       </div>
     </article>
   );
+}
+
+function MealDetailModal({ meal, onClose }: { meal: MealCandidate; onClose: () => void }) {
+  const ingredientNames = getUniqueIngredientNames(meal);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  return (
+    <div className="modal-backdrop detail-backdrop" onClick={onClose}>
+      <section
+        className="meal-detail-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="meal-detail-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="meal-detail-header">
+          <div>
+            <p className="eyebrow">{meal.label}</p>
+            <h2 id="meal-detail-title">{meal.title}</h2>
+          </div>
+          <button className="detail-close-button" type="button" onClick={onClose} aria-label="献立詳細を閉じる">
+            ×
+          </button>
+        </header>
+
+        <div className="meal-detail-body">
+          <section className="detail-section">
+            <h3>基本情報</h3>
+            <div className="detail-macro-grid">
+              <div>
+                <span>kcal</span>
+                <strong>{meal.totals.kcal}</strong>
+              </div>
+              <div>
+                <span>P</span>
+                <strong>{meal.totals.protein}g</strong>
+              </div>
+              <div>
+                <span>F</span>
+                <strong>{meal.totals.fat}g</strong>
+              </div>
+              <div>
+                <span>C</span>
+                <strong>{meal.totals.carb}g</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="detail-section">
+            <h3>構成</h3>
+            <div className="detail-items">
+              {meal.items.map((item) => (
+                <article className="detail-item" key={`${meal.id}-detail-${item.role}-${item.recipe.id}`}>
+                  <span>{item.role}</span>
+                  <div>
+                    <strong>{item.recipe.name}</strong>
+                    <ul className="ingredient-list detail-ingredient-list" aria-label={`${item.recipe.name}の材料`}>
+                      {item.ingredients.map((ingredient) => (
+                        <li key={`${item.recipe.id}-detail-${ingredient.food.id}-${ingredient.amount}`}>
+                          <span>{ingredient.food.name}</span>
+                          <span>{ingredient.amount}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="detail-section">
+            <h3>食材一覧</h3>
+            <div className="ingredient-chip-list">
+              {ingredientNames.map((name) => (
+                <span key={name}>{name}</span>
+              ))}
+            </div>
+          </section>
+
+          <section className="detail-section">
+            <h3>買い物リスト</h3>
+            <ul className="shopping-list" aria-label="買い物リスト">
+              {ingredientNames.map((name) => (
+                <li key={`shopping-${name}`}>
+                  <label>
+                    <input type="checkbox" />
+                    <span>{name}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="detail-section">
+            <h3>参考レシピ</h3>
+            <p className="muted-text">今後追加予定です。</p>
+          </section>
+
+          <section className="detail-section">
+            <h3>注意</h3>
+            <p>{meal.caution}</p>
+            <p className="muted-text">PFC計算用の参考値です。実際の分量は商品やレシピにより異なります。</p>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function getUniqueIngredientNames(meal: MealCandidate) {
+  return Array.from(new Set(meal.items.flatMap((item) => item.ingredients.map((ingredient) => ingredient.food.name))));
 }
 
 function MacroResult({ field, meal }: { field: (typeof macroFields)[number]; meal: MealCandidate }) {
