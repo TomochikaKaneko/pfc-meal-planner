@@ -1668,12 +1668,10 @@ function classifyCandidateLabel(candidate: MealCandidate, input: MealInput, fall
 }
 
 function buildMealTitle(template: MealTemplate, items: MealItem[]) {
-  const representative = pickRepresentativeMealItem(items);
+  const representative = pickTitleMealItem(items);
   if (!representative) return template.title;
 
   const name = displayMealTitleName(representative.recipe);
-  if (representative.role === '主食' && isNamedStapleDish(name)) return name;
-  if (representative.role === '主菜') return `${name}定食`;
   return name;
 }
 
@@ -1689,6 +1687,22 @@ function pickRepresentativeMealItem(items: MealItem[]) {
   return candidateItems
     .map((item) => ({ item, score: representativeDishScore(item) }))
     .sort((a, b) => b.score - a.score)[0]?.item;
+}
+
+function pickTitleMealItem(items: MealItem[]) {
+  const staple = items.find((item) => item.role === '主食');
+  const namedStaple = staple && isNamedStapleDish(displayMealTitleName(staple.recipe));
+  if (namedStaple) return staple;
+
+  const main = items.find((item) => item.role === '主菜');
+  if (main) return main;
+  if (staple) return staple;
+
+  return (
+    items.find((item) => item.role === '副菜') ??
+    items.find((item) => item.role === '汁物') ??
+    items[0]
+  );
 }
 
 function representativeDishScore(item: MealItem) {
