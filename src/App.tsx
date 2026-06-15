@@ -999,18 +999,10 @@ function MealCard({ meal, rank, onOpen }: { meal: MealCandidate; rank: number; o
 
       <div className="meal-items">
         {meal.items.map((item) => (
-          <div className="meal-item" key={`${meal.id}-${item.role}-${item.recipe.id}`}>
+          <div className="meal-item compact" key={`${meal.id}-${item.role}-${item.recipe.id}`}>
             <span>{item.role}</span>
             <div>
               <strong>{item.recipe.name}</strong>
-              <ul className="ingredient-list" aria-label={`${item.recipe.name}の材料`}>
-                {item.ingredients.map((ingredient) => (
-                  <li key={`${item.recipe.id}-${ingredient.food.id}-${ingredient.amount}`}>
-                    <span>{ingredient.food.name}</span>
-                    <span>{ingredient.amount}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
         ))}
@@ -1022,16 +1014,6 @@ function MealCard({ meal, rank, onOpen }: { meal: MealCandidate; rank: number; o
         ))}
       </div>
 
-      <div className="note-grid">
-        <p>
-          <strong>理由</strong>
-          {meal.reason}
-        </p>
-        <p>
-          <strong>注意</strong>
-          {meal.caution}
-        </p>
-      </div>
     </article>
   );
 }
@@ -1137,6 +1119,11 @@ function MealDetailModal({ meal, onClose }: { meal: MealCandidate; onClose: () =
           <section className="detail-section">
             <h3>参考レシピ</h3>
             <p className="muted-text">今後追加予定です。</p>
+          </section>
+
+          <section className="detail-section">
+            <h3>理由</h3>
+            <p>{meal.reason}</p>
           </section>
 
           <section className="detail-section">

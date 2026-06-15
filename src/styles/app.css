@@ -779,6 +779,15 @@ button {
   line-height: 1.35;
 }
 
+.meal-item.compact {
+  min-height: 0;
+  padding: 7px 10px;
+}
+
+.meal-item.compact strong {
+  font-size: 0.92rem;
+}
+
 .ingredient-list {
   display: grid;
   gap: 3px;
