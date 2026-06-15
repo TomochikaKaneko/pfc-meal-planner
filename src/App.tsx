@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BookOpen, ChefHat, CircleHelp, Home, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, ChefHat, CircleHelp, Home, Plus, RefreshCw, Save, ShoppingCart, Sparkles, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
 import type { ConditionTag, Food, FoodCategory, MacroKey, MealCandidate, MealInput } from './types';
@@ -9,6 +9,7 @@ const USER_FOODS_KEY = 'pfc-meal-planner:user-foods';
 const LAST_INPUT_KEY = 'pfc-meal-planner:last-input';
 const FREE_CONDITION_KEY = 'pfc-meal-planner:free-condition';
 const EXCLUDED_FOODS_KEY = 'pfcMealPlanner.excludedFoodIds';
+const SHOPPING_LIST_KEY = 'pfcMealPlanner.shoppingList';
 
 const conditionOptions: { value: ConditionTag; label: string }[] = [
   { value: 'white-rice', label: '白米' },
@@ -57,7 +58,12 @@ const emptyFoodForm = {
   tags: '',
 };
 
-type Tab = 'home' | 'results' | 'new-food' | 'foods' | 'guide';
+type Tab = 'home' | 'results' | 'new-food' | 'foods' | 'shopping' | 'guide';
+
+interface ShoppingListItem {
+  name: string;
+  checked: boolean;
+}
 
 export function App() {
   const [tab, setTab] = useState<Tab>('home');
@@ -65,6 +71,7 @@ export function App() {
   const [freeCondition, setFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
   const [excludedFoodIds, setExcludedFoodIds] = useState<string[]>(() => loadExcludedFoodIds());
+  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => loadShoppingList());
   const [foodSearch, setFoodSearch] = useState('');
   const [foodCategoryFilter, setFoodCategoryFilter] = useState<FoodCategory | 'all'>('all');
   const [results, setResults] = useState<MealCandidate[]>([]);
@@ -270,6 +277,33 @@ export function App() {
     localStorage.setItem(EXCLUDED_FOODS_KEY, JSON.stringify(nextExcluded));
   }
 
+  function updateShoppingList(nextList: ShoppingListItem[]) {
+    setShoppingList(nextList);
+    localStorage.setItem(SHOPPING_LIST_KEY, JSON.stringify(nextList));
+  }
+
+  function addMealToShoppingList(meal: MealCandidate) {
+    const names = getUniqueIngredientNames(meal);
+    const existingNames = new Set(shoppingList.map((item) => item.name));
+    const additions = names.filter((name) => !existingNames.has(name)).map((name) => ({ name, checked: false }));
+    if (additions.length === 0) return 0;
+    updateShoppingList([...shoppingList, ...additions]);
+    return additions.length;
+  }
+
+  function toggleShoppingItem(name: string) {
+    updateShoppingList(shoppingList.map((item) => (item.name === name ? { ...item, checked: !item.checked } : item)));
+  }
+
+  function deleteShoppingItem(name: string) {
+    updateShoppingList(shoppingList.filter((item) => item.name !== name));
+  }
+
+  function clearShoppingList() {
+    if (!window.confirm('買い物リストをすべてクリアしますか？')) return;
+    updateShoppingList([]);
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -378,6 +412,8 @@ export function App() {
               <RefreshCw size={20} />
               再提案
             </button>
+
+            <p className="tap-hint">献立をタップすると、材料や買い物リストを確認できます。</p>
 
             {results.length === 0 ? (
               <NoResultState hasGenerated={hasGeneratedResults} freeCondition={freeCondition} excludedFoodCount={excludedFoodIds.length} />
@@ -549,6 +585,15 @@ export function App() {
           </section>
         )}
 
+        {tab === 'shopping' && (
+          <ShoppingListScreen
+            items={shoppingList}
+            onToggle={toggleShoppingItem}
+            onDelete={deleteShoppingItem}
+            onClear={clearShoppingList}
+          />
+        )}
+
         {tab === 'guide' && (
           <section className="stack">
             <div className="section-title">
@@ -624,13 +669,14 @@ export function App() {
         />
       )}
 
-      {selectedMeal && <MealDetailModal meal={selectedMeal} onClose={() => setSelectedMeal(null)} />}
+      {selectedMeal && <MealDetailModal meal={selectedMeal} onAddShoppingList={addMealToShoppingList} onClose={() => setSelectedMeal(null)} />}
 
       <nav className="bottom-nav" aria-label="主要ナビゲーション">
         <NavButton active={tab === 'home'} icon={<Home size={20} />} label="ホーム" onClick={() => setTab('home')} />
         <NavButton active={tab === 'results'} icon={<ChefHat size={20} />} label="結果" onClick={() => setTab('results')} />
         <NavButton active={tab === 'new-food'} icon={<Plus size={20} />} label="登録" onClick={() => setTab('new-food')} />
         <NavButton active={tab === 'foods'} icon={<BookOpen size={20} />} label="食品" onClick={() => setTab('foods')} />
+        <NavButton active={tab === 'shopping'} icon={<ShoppingCart size={20} />} label="買い物" onClick={() => setTab('shopping')} />
         <NavButton active={tab === 'guide'} icon={<CircleHelp size={20} />} label="使い方" onClick={() => setTab('guide')} />
       </nav>
       {isTagSelectorOpen && (
@@ -1018,8 +1064,76 @@ function MealCard({ meal, rank, onOpen }: { meal: MealCandidate; rank: number; o
   );
 }
 
-function MealDetailModal({ meal, onClose }: { meal: MealCandidate; onClose: () => void }) {
+function ShoppingListScreen({
+  items,
+  onToggle,
+  onDelete,
+  onClear,
+}: {
+  items: ShoppingListItem[];
+  onToggle: (name: string) => void;
+  onDelete: (name: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <section className="stack shopping-screen">
+      <div className="section-title">
+        <h2>買い物リスト</h2>
+        <span>{items.length}件</span>
+      </div>
+
+      <section className="panel shopping-guide">
+        <h3>買い物リストの使い方</h3>
+        <ol>
+          <li>献立を開く</li>
+          <li>「買い物リストに追加」を押す</li>
+          <li>買い物時にチェックを付ける</li>
+        </ol>
+      </section>
+
+      {items.length === 0 ? (
+        <div className="empty-state">
+          <ShoppingCart size={36} />
+          <p>買い物リストはまだ空です。献立詳細から追加してください。</p>
+        </div>
+      ) : (
+        <section className="panel shopping-list-panel">
+          <div className="shopping-list-header">
+            <span>{items.filter((item) => item.checked).length} / {items.length}件チェック済み</span>
+            <button className="text-button danger-text" type="button" onClick={onClear}>
+              すべてクリア
+            </button>
+          </div>
+          <ul className="shopping-list saved" aria-label="買い物リスト">
+            {items.map((item) => (
+              <li key={item.name} className={item.checked ? 'checked' : ''}>
+                <label>
+                  <input type="checkbox" checked={item.checked} onChange={() => onToggle(item.name)} />
+                  <span>{item.name}</span>
+                </label>
+                <button className="text-button danger-text" type="button" onClick={() => onDelete(item.name)}>
+                  削除
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </section>
+  );
+}
+
+function MealDetailModal({
+  meal,
+  onAddShoppingList,
+  onClose,
+}: {
+  meal: MealCandidate;
+  onAddShoppingList: (meal: MealCandidate) => number;
+  onClose: () => void;
+}) {
   const ingredientNames = getUniqueIngredientNames(meal);
+  const [addMessage, setAddMessage] = useState('');
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -1104,6 +1218,18 @@ function MealDetailModal({ meal, onClose }: { meal: MealCandidate; onClose: () =
 
           <section className="detail-section">
             <h3>買い物リスト</h3>
+            <button
+              className="primary-action compact-action"
+              type="button"
+              onClick={() => {
+                const addedCount = onAddShoppingList(meal);
+                setAddMessage(addedCount > 0 ? `${addedCount}件追加しました` : 'すでに追加済みです');
+              }}
+            >
+              <ShoppingCart size={18} />
+              買い物リストに追加
+            </button>
+            {addMessage && <p className="shopping-add-note">{addMessage}</p>}
             <ul className="shopping-list" aria-label="買い物リスト">
               {ingredientNames.map((name) => (
                 <li key={`shopping-${name}`}>
@@ -1325,6 +1451,24 @@ function loadUserFoods(): Food[] {
 
 function loadExcludedFoodIds(): string[] {
   return normalizeStringArray(loadJson<unknown>(EXCLUDED_FOODS_KEY, []));
+}
+
+function loadShoppingList(): ShoppingListItem[] {
+  return normalizeShoppingList(loadJson<unknown>(SHOPPING_LIST_KEY, []));
+}
+
+function normalizeShoppingList(value: unknown): ShoppingListItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: ShoppingListItem[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.name !== 'string') continue;
+    const name = item.name.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    items.push({ name, checked: item.checked === true });
+  }
+  return items;
 }
 
 function normalizeStringArray(value: unknown): string[] {

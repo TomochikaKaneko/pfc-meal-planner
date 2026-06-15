@@ -571,6 +571,18 @@ button {
   height: 92px;
 }
 
+.tap-hint {
+  margin: -2px 0 2px;
+  border: 1px solid rgba(47, 125, 104, 0.12);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: #315346;
+  background: #eef8f2;
+  font-size: 0.8rem;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
 .result-replan-bar {
   position: fixed;
   right: 0;
@@ -1042,6 +1054,78 @@ button {
   accent-color: #2f7d68;
 }
 
+.shopping-add-note {
+  margin: 0;
+  color: #2f7d68;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.shopping-screen {
+  padding-bottom: 84px;
+}
+
+.shopping-guide {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.shopping-guide h3 {
+  margin: 0;
+  color: #22342e;
+  font-size: 0.98rem;
+}
+
+.shopping-guide ol {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #4f665d;
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.shopping-list-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.shopping-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.shopping-list-header span {
+  color: #2f7d68;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.shopping-list.saved li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #f4f8f5;
+}
+
+.shopping-list.saved li.checked span {
+  color: #83918b;
+  text-decoration: line-through;
+}
+
+.danger-text {
+  color: #ba4e39;
+}
+
 .muted-text {
   color: #65796f;
   font-size: 0.82rem;
@@ -1362,8 +1446,8 @@ button {
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
   width: min(100%, 430px);
   margin: 0 auto;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
@@ -1381,7 +1465,7 @@ button {
   border-radius: 8px;
   color: #6c7b75;
   background: transparent;
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   font-weight: 850;
 }
 
