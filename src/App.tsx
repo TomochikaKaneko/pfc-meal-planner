@@ -58,7 +58,7 @@ const emptyFoodForm = {
   tags: '',
 };
 
-type Tab = 'home' | 'results' | 'new-food' | 'foods' | 'shopping' | 'guide';
+type Tab = 'home' | 'results' | 'foods' | 'shopping' | 'guide';
 
 interface ShoppingListItem {
   name: string;
@@ -282,8 +282,7 @@ export function App() {
     localStorage.setItem(SHOPPING_LIST_KEY, JSON.stringify(nextList));
   }
 
-  function addMealToShoppingList(meal: MealCandidate) {
-    const names = getUniqueIngredientNames(meal);
+  function addMealToShoppingList(names: string[]) {
     const existingNames = new Set(shoppingList.map((item) => item.name));
     const additions = names.filter((name) => !existingNames.has(name)).map((name) => ({ name, checked: false }));
     if (additions.length === 0) return 0;
@@ -424,68 +423,6 @@ export function App() {
           </section>
         )}
 
-        {tab === 'new-food' && (
-          <section className="stack">
-            <div className="section-title">
-              <h2>食品登録</h2>
-              <span>localStorage保存</span>
-            </div>
-            <form className="panel form-panel" onSubmit={saveFood}>
-              <label>
-                食品名
-                <input value={foodForm.name} onChange={(event) => setFoodForm({ ...foodForm, name: event.target.value })} required />
-              </label>
-              <label>
-                カテゴリ
-                <select
-                  value={foodForm.category}
-                  onChange={(event) => setFoodForm({ ...foodForm, category: event.target.value as FoodCategory })}
-                >
-                  {categoryOptions.map((option) => (
-                    <option value={option.value} key={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                標準量
-                <input
-                  value={foodForm.standardAmount}
-                  onChange={(event) => setFoodForm({ ...foodForm, standardAmount: event.target.value })}
-                  placeholder="例: 100g"
-                  required
-                />
-              </label>
-              <div className="macro-grid compact">
-                {macroFields.map((field) => (
-                  <MacroInput
-                    key={field.key}
-                  label={foodMacroLabel(field.key)}
-                  value={foodForm[field.key]}
-                  onChange={(value) => setFoodForm({ ...foodForm, [field.key]: parseMacroValue(value) ?? 0 })}
-                  onFocus={() => setNumericInputFocused(true)}
-                  onBlur={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
-                  />
-                ))}
-              </div>
-              <label>
-                タグ
-                <span className="field-help">タグは献立提案で利用します。例: 高タンパク、低脂質、魚、鶏肉、豆腐、納豆、キムチ、朝向き、間食向き</span>
-                <input
-                  value={foodForm.tags}
-                  onChange={(event) => setFoodForm({ ...foodForm, tags: event.target.value })}
-                  placeholder="例: chicken,low-fat"
-                />
-              </label>
-              <button className="primary-action" type="submit">
-                <Save size={20} />
-                保存
-              </button>
-            </form>
-          </section>
-        )}
-
         {tab === 'foods' && (
           <section className="stack food-browser">
             <div className="section-title">
@@ -494,6 +431,65 @@ export function App() {
                 {foodCategoryFilter === 'all' ? 'すべて' : categoryLabel(foodCategoryFilter)} {filteredFoods.length}件 / {excludedFoodIds.length}件除外中
               </span>
             </div>
+            <details className="panel food-registration-panel">
+              <summary>
+                <Plus size={18} />
+                食品を登録する
+              </summary>
+              <form className="form-panel embedded" onSubmit={saveFood}>
+                <label>
+                  食品名
+                  <input value={foodForm.name} onChange={(event) => setFoodForm({ ...foodForm, name: event.target.value })} required />
+                </label>
+                <label>
+                  カテゴリ
+                  <select
+                    value={foodForm.category}
+                    onChange={(event) => setFoodForm({ ...foodForm, category: event.target.value as FoodCategory })}
+                  >
+                    {categoryOptions.map((option) => (
+                      <option value={option.value} key={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  標準量
+                  <input
+                    value={foodForm.standardAmount}
+                    onChange={(event) => setFoodForm({ ...foodForm, standardAmount: event.target.value })}
+                    placeholder="例: 100g"
+                    required
+                  />
+                </label>
+                <div className="macro-grid compact">
+                  {macroFields.map((field) => (
+                    <MacroInput
+                      key={field.key}
+                      label={foodMacroLabel(field.key)}
+                      value={foodForm[field.key]}
+                      onChange={(value) => setFoodForm({ ...foodForm, [field.key]: parseMacroValue(value) ?? 0 })}
+                      onFocus={() => setNumericInputFocused(true)}
+                      onBlur={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
+                    />
+                  ))}
+                </div>
+                <label>
+                  タグ
+                  <span className="field-help">タグは献立提案で利用します。例: 高タンパク、低脂質、魚、鶏肉、豆腐、納豆、キムチ、朝向き、間食向き</span>
+                  <input
+                    value={foodForm.tags}
+                    onChange={(event) => setFoodForm({ ...foodForm, tags: event.target.value })}
+                    placeholder="例: chicken,low-fat"
+                  />
+                </label>
+                <button className="primary-action" type="submit">
+                  <Save size={20} />
+                  保存
+                </button>
+              </form>
+            </details>
             <section className="panel excluded-food-summary">
               <div>
                 <h3>出さない食品</h3>
@@ -674,7 +670,6 @@ export function App() {
       <nav className="bottom-nav" aria-label="主要ナビゲーション">
         <NavButton active={tab === 'home'} icon={<Home size={20} />} label="ホーム" onClick={() => setTab('home')} />
         <NavButton active={tab === 'results'} icon={<ChefHat size={20} />} label="結果" onClick={() => setTab('results')} />
-        <NavButton active={tab === 'new-food'} icon={<Plus size={20} />} label="登録" onClick={() => setTab('new-food')} />
         <NavButton active={tab === 'foods'} icon={<BookOpen size={20} />} label="食品" onClick={() => setTab('foods')} />
         <NavButton active={tab === 'shopping'} icon={<ShoppingCart size={20} />} label="買い物" onClick={() => setTab('shopping')} />
         <NavButton active={tab === 'guide'} icon={<CircleHelp size={20} />} label="使い方" onClick={() => setTab('guide')} />
@@ -1129,19 +1124,36 @@ function MealDetailModal({
   onClose,
 }: {
   meal: MealCandidate;
-  onAddShoppingList: (meal: MealCandidate) => number;
+  onAddShoppingList: (names: string[]) => number;
   onClose: () => void;
 }) {
   const ingredientNames = getUniqueIngredientNames(meal);
+  const [selectedIngredientNames, setSelectedIngredientNames] = useState<string[]>([]);
   const [addMessage, setAddMessage] = useState('');
 
   useEffect(() => {
+    const scrollY = window.scrollY;
     const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
     document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
     };
   }, []);
+
+  function toggleDetailIngredient(name: string) {
+    setAddMessage('');
+    setSelectedIngredientNames((current) => (current.includes(name) ? current.filter((item) => item !== name) : [...current, name]));
+  }
 
   return (
     <div className="modal-backdrop detail-backdrop" onClick={onClose}>
@@ -1222,7 +1234,11 @@ function MealDetailModal({
               className="primary-action compact-action"
               type="button"
               onClick={() => {
-                const addedCount = onAddShoppingList(meal);
+                if (selectedIngredientNames.length === 0) {
+                  setAddMessage('追加する食材を選択してください');
+                  return;
+                }
+                const addedCount = onAddShoppingList(selectedIngredientNames);
                 setAddMessage(addedCount > 0 ? `${addedCount}件追加しました` : 'すでに追加済みです');
               }}
             >
@@ -1234,7 +1250,7 @@ function MealDetailModal({
               {ingredientNames.map((name) => (
                 <li key={`shopping-${name}`}>
                   <label>
-                    <input type="checkbox" />
+                    <input type="checkbox" checked={selectedIngredientNames.includes(name)} onChange={() => toggleDetailIngredient(name)} />
                     <span>{name}</span>
                   </label>
                 </li>

@@ -622,6 +622,7 @@ button {
   max-width: 100%;
   margin: 0 auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   background: rgba(15, 32, 26, 0.38);
 }
 
@@ -895,6 +896,7 @@ button {
   background: #f8fbf8;
   box-shadow: 0 -20px 44px rgba(20, 48, 38, 0.24);
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .meal-detail-header {
@@ -934,6 +936,7 @@ button {
 .meal-detail-body {
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px;
   -webkit-overflow-scrolling: touch;
 }
@@ -1157,6 +1160,32 @@ button {
 .form-panel {
   display: grid;
   gap: 14px;
+}
+
+.food-registration-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.food-registration-panel summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 16px;
+  color: #2f7d68;
+  font-weight: 900;
+  cursor: pointer;
+  list-style: none;
+}
+
+.food-registration-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-panel.embedded {
+  padding: 0 16px 16px;
+  box-shadow: none;
 }
 
 .form-panel label {
@@ -1446,8 +1475,8 @@ button {
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
   width: min(100%, 430px);
   margin: 0 auto;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
@@ -1465,7 +1494,7 @@ button {
   border-radius: 8px;
   color: #6c7b75;
   background: transparent;
-  font-size: 0.64rem;
+  font-size: 0.7rem;
   font-weight: 850;
 }
 
