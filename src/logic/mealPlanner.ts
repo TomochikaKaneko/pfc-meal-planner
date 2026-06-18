@@ -126,15 +126,40 @@ const mealTemplates: MealTemplate[] = [
 ];
 
 const tagAliases: Record<ConditionTag, string[]> = {
-  'white-rice': ['white-rice', 'rice'],
+  'white-rice': ['white-rice', 'rice', 'compat:rice:high'],
   barley: ['barley', 'rice', 'fiber'],
+  rice: ['white-rice', 'rice', 'compat:rice:high', 'style:setMeal'],
+  'rice-bowl': ['rice-bowl', 'bowl', 'style:bowl', 'compat:bowl:high', 'white-rice', 'rice'],
+  bread: ['bread', 'style:bread', 'western'],
+  noodle: ['noodle', 'style:noodle', 'ramen', 'udon', 'soba', 'yakisoba', 'compat:noodle:high'],
+  pasta: ['pasta', 'style:pasta', 'western'],
+  japanese: ['japanese', 'genre:japanese', 'style:setMeal'],
+  western: ['western', 'genre:western'],
+  chinese: ['chinese', 'genre:chinese'],
+  korean: ['korean', 'genre:korean', 'kimchi'],
+  ethnic: ['ethnic', 'genre:ethnic', 'discover:discovery'],
+  izakaya: ['izakaya', 'genre:izakaya'],
   fish: ['fish'],
+  seafood: ['seafood', 'fish', 'sashimi'],
   chicken: ['chicken'],
+  pork: ['pork'],
+  beef: ['beef'],
+  egg: ['egg'],
   tofu: ['tofu'],
   natto: ['natto'],
   mekabu: ['mekabu'],
-  'low-fat': ['low-fat'],
-  'high-protein': ['high-protein'],
+  'low-fat': ['low-fat', 'trait:lowFat'],
+  'high-protein': ['high-protein', 'trait:highProtein'],
+  hearty: ['satisfying', 'trait:hearty'],
+  light: ['light', 'trait:light', 'low-fat'],
+  quick: ['convenience', 'trait:quick'],
+  'one-dish': ['role:protagonist', 'trait:oneDish', 'style:bowl', 'style:pasta', 'style:noodle', 'style:bread', 'style:curry'],
+  breakfast: ['breakfast', 'scene:breakfast'],
+  lunch: ['lunch', 'scene:lunch'],
+  dinner: ['dinner', 'scene:dinner'],
+  snack: ['snack', 'scene:snack'],
+  standard: ['dish:standard', 'discover:standard'],
+  discovery: ['discover:uncommon', 'discover:discovery', 'discovery', 'genre:ethnic'],
 };
 
 const macroKeys = ['kcal', 'protein', 'fat', 'carb'] as const;
@@ -917,9 +942,79 @@ const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
   },
 ];
 
+const userFacingFreeTextIntentRules: typeof freeTextIntentRules = [
+  {
+    mood: 'bread',
+    keywords: ['パン', 'トースト', 'サンド', 'ホットサンド'],
+    tags: ['bread', 'style:bread', 'western', 'genre:western'],
+    includeTerms: ['パン', 'トースト', 'サンド', 'ホットサンド', 'ピザトースト', '食パン'],
+    penaltyTerms: ['白米', '丼', 'ラーメン', 'うどん', 'そば'],
+  },
+  {
+    mood: 'hotpot',
+    keywords: ['鍋', 'なべ', 'おでん', '寄せ鍋', 'キムチ鍋', '鶏団子鍋', 'ちゃんこ鍋', 'しゃぶしゃぶ'],
+    tags: ['structure:flexible', 'style:hotPot', 'soup', 'japanese', 'genre:japanese'],
+    includeTerms: ['鍋', 'おでん', '寄せ鍋', 'キムチ鍋', '鶏団子鍋', 'ちゃんこ鍋', 'しゃぶしゃぶ', '湯豆腐'],
+    penaltyTerms: ['パスタ', 'パン', 'ヨーグルト', 'オイコス'],
+  },
+  {
+    mood: 'ethnic',
+    keywords: ['エスニック', 'タイ料理', 'ガパオ', 'ラープ', 'フムス', 'ムサカ', 'クスクス', 'シャクシュカ'],
+    tags: ['ethnic', 'genre:ethnic', 'discover:discovery', 'discover:uncommon'],
+    includeTerms: ['エスニック', 'ガパオ', 'ラープ', 'フムス', 'ムサカ', 'クスクス', 'シャクシュカ', 'ナンプラー', 'ひよこ豆'],
+    penaltyTerms: ['納豆ご飯', '味噌汁', 'おでん'],
+  },
+  {
+    mood: 'standard',
+    keywords: ['定番', '普通', '王道'],
+    tags: ['dish:standard', 'discover:standard'],
+    includeTerms: ['定番', '定食', '丼', '焼き魚', '生姜焼き', '親子丼'],
+    penaltyTerms: ['変わり種', '創作', '珍しい'],
+  },
+  {
+    mood: 'discovery',
+    keywords: ['変わり種', '変わった', '珍しい', '発見', '知らない料理'],
+    tags: ['discover:discovery', 'discover:uncommon', 'genre:ethnic', 'ethnic'],
+    includeTerms: ['シャクシュカ', 'ガパオ', 'ラープ', 'フムス', 'ムサカ', 'クスクス', 'ソパデアホ'],
+    penaltyTerms: ['定番'],
+  },
+  {
+    mood: 'quick',
+    keywords: ['時短', 'すぐ', '簡単', 'コンビニ'],
+    tags: ['convenience', 'trait:quick'],
+    includeTerms: ['コンビニ', 'サラダチキン', 'ツナ', 'ゆで卵', 'プロテイン', '時短'],
+  },
+  {
+    mood: 'one-dish',
+    keywords: ['一皿料理', '一皿', 'ワンプレート'],
+    tags: ['trait:oneDish', 'role:protagonist', 'style:bowl', 'style:pasta', 'style:noodle', 'style:bread'],
+    includeTerms: ['丼', 'カレー', 'パスタ', 'ラーメン', 'うどん', 'そば', '焼きそば', 'トースト', 'ワンプレート'],
+  },
+  {
+    mood: 'rice',
+    keywords: ['ご飯', 'ごはん', '米', 'ライス'],
+    tags: ['white-rice', 'rice', 'compat:rice:high', 'style:setMeal'],
+    includeTerms: ['白米', 'ご飯', 'ごはん', '定食', '丼', 'ライス'],
+    penaltyTerms: ['パン', 'パスタ', 'ラーメン', 'うどん', 'そば'],
+  },
+  {
+    mood: 'low-fat',
+    keywords: ['低脂質', '脂質控えめ', '脂質少なめ'],
+    tags: ['low-fat', 'trait:lowFat'],
+    includeTerms: ['低脂質', '鶏むね', 'ささみ', 'タラ', 'ツナ水煮', '豆腐'],
+    penaltyTerms: ['チーズ', 'マヨネーズ', 'ごま油', 'オリーブオイル'],
+  },
+  {
+    mood: 'high-protein',
+    keywords: ['高タンパク', '高たんぱく', 'タンパク質', 'たんぱく質'],
+    tags: ['high-protein', 'trait:highProtein', 'chicken', 'fish'],
+    includeTerms: ['鶏むね', 'ささみ', '鮭', 'マグロ', '卵', '豆腐', '高タンパク'],
+  },
+];
+
 function buildFreeTextIntent(terms: string[]): FreeTextIntent {
   const normalizedTerms = terms.map(normalizeIntentText).filter(Boolean);
-  const matchedRules = [...freeTextIntentRules, ...canonicalFreeTextIntentRules, ...expandedFreeTextIntentRules].filter((rule) =>
+  const matchedRules = [...freeTextIntentRules, ...canonicalFreeTextIntentRules, ...expandedFreeTextIntentRules, ...userFacingFreeTextIntentRules].filter((rule) =>
     normalizedTerms.some((term) =>
       rule.keywords.map(normalizeIntentText).some((keyword) => term.includes(keyword) || (term.length >= 3 && keyword.includes(term))),
     ),
@@ -963,14 +1058,16 @@ function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTe
       (tags.includes('satisfying') ? 120 : 0)
     : 0;
   const pastaGate = intent.moods.includes('pasta') && !tags.includes('pasta') ? -900 : 0;
+  const breadGate = intent.moods.includes('bread') && !tags.includes('bread') && !tags.includes('style:bread') ? -720 : 0;
   const yakisobaGate = intent.moods.includes('yakisoba') && !tags.includes('yakisoba') ? -900 : 0;
   const koreanGate = intent.moods.includes('korean') && !tags.includes('korean') && !tags.includes('kimchi') ? -620 : 0;
   const chineseGate = intent.moods.includes('chinese') && !tags.includes('chinese') ? -620 : 0;
+  const ethnicGate = intent.moods.includes('ethnic') && !tags.includes('ethnic') && !tags.includes('genre:ethnic') ? -620 : 0;
   const meatGate = intent.moods.includes('meat') && !tags.some((tag) => ['chicken', 'pork', 'beef'].includes(tag)) ? -780 : 0;
   const meatBonus = intent.moods.includes('meat') && tags.some((tag) => ['chicken', 'pork', 'beef'].includes(tag)) ? 180 : 0;
   const lightBonus = intent.moods.includes('light') ? Math.max(0, 120 - totals.fat * 5) : 0;
 
-  return tagScore + includeScore + heartyBonus + meatBonus + lightBonus - penalty + pastaGate + yakisobaGate + koreanGate + chineseGate + meatGate;
+  return tagScore + includeScore + heartyBonus + meatBonus + lightBonus - penalty + pastaGate + breadGate + yakisobaGate + koreanGate + chineseGate + ethnicGate + meatGate;
 }
 
 function recipeSearchText(recipe: Recipe, foodMap: Map<string, Food>) {
@@ -1014,6 +1111,7 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
   const searchText = candidateSearchText(candidate);
   const strictMoods = [
     'pasta',
+    'bread',
     'ramen',
     'udon',
     'soba',
@@ -1029,10 +1127,12 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'rice-bowl',
     'oyakodon',
     'western',
+    'ethnic',
     'curry',
     'yakiniku',
     'sushi',
     'hotpot',
+    'one-dish',
     'stir-fry',
     'spicy',
     'chicken',
@@ -1045,6 +1145,7 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'ikura',
     'seafood',
     'sashimi',
+    'rice',
   ];
   if (strictMoods.some((mood) => intent.moods.includes(mood) && !candidateMatchesMood(candidate, tags, searchText, mood))) return false;
   if (intent.moods.includes('hearty')) {

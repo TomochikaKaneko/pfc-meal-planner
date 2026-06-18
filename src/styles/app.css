@@ -415,6 +415,29 @@ button {
   margin-top: 14px;
 }
 
+.tag-group-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.tag-group {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-group-title {
+  margin: 0;
+  color: #4f6f63;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.tag-group .tag-grid {
+  margin-top: 0;
+}
+
 .tag {
   min-height: 40px;
   border: 1px solid rgba(47, 125, 104, 0.2);

@@ -13,18 +13,76 @@ const FREE_CONDITION_KEY = storageKeys.freeCondition;
 const EXCLUDED_FOODS_KEY = storageKeys.excludedFoodIds;
 const SHOPPING_LIST_KEY = storageKeys.shoppingList;
 
-const conditionOptions: { value: ConditionTag; label: string }[] = [
-  { value: 'white-rice', label: '白米' },
-  { value: 'barley', label: 'スーパー大麦' },
-  { value: 'fish', label: '魚' },
-  { value: 'chicken', label: '鶏肉' },
-  { value: 'tofu', label: '豆腐' },
-  { value: 'natto', label: '納豆' },
-  { value: 'mekabu', label: 'めかぶ' },
-  { value: 'low-fat', label: '低脂質' },
-  { value: 'high-protein', label: '高タンパク' },
+const conditionGroups: Array<{ title: string; options: { value: ConditionTag; label: string }[] }> = [
+  {
+    title: '主食',
+    options: [
+      { value: 'rice', label: 'ご飯' },
+      { value: 'rice-bowl', label: '丼' },
+      { value: 'bread', label: 'パン' },
+      { value: 'noodle', label: '麺' },
+      { value: 'pasta', label: 'パスタ' },
+    ],
+  },
+  {
+    title: 'ジャンル',
+    options: [
+      { value: 'japanese', label: '和食' },
+      { value: 'western', label: '洋食' },
+      { value: 'chinese', label: '中華' },
+      { value: 'korean', label: '韓国' },
+      { value: 'ethnic', label: 'エスニック' },
+      { value: 'izakaya', label: '居酒屋' },
+    ],
+  },
+  {
+    title: '特徴',
+    options: [
+      { value: 'high-protein', label: '高タンパク' },
+      { value: 'low-fat', label: '低脂質' },
+      { value: 'hearty', label: 'ガッツリ' },
+      { value: 'light', label: 'さっぱり' },
+      { value: 'quick', label: '時短' },
+      { value: 'one-dish', label: '一皿料理' },
+    ],
+  },
+  {
+    title: 'シーン',
+    options: [
+      { value: 'breakfast', label: '朝食' },
+      { value: 'lunch', label: '昼食' },
+      { value: 'dinner', label: '夕食' },
+      { value: 'snack', label: '間食' },
+    ],
+  },
+  {
+    title: '発見',
+    options: [
+      { value: 'standard', label: '定番' },
+      { value: 'discovery', label: '変わり種歓迎' },
+    ],
+  },
+  {
+    title: '食材',
+    options: [
+      { value: 'chicken', label: '鶏肉' },
+      { value: 'pork', label: '豚肉' },
+      { value: 'beef', label: '牛肉' },
+      { value: 'fish', label: '魚' },
+      { value: 'seafood', label: '魚介' },
+      { value: 'egg', label: '卵' },
+      { value: 'tofu', label: '豆腐' },
+    ],
+  },
 ];
 
+const conditionOptions = conditionGroups.flatMap((group) => group.options);
+const legacyConditionOptions: { value: ConditionTag; label: string }[] = [
+  { value: 'white-rice', label: '白米' },
+  { value: 'barley', label: 'スーパー大麦' },
+  { value: 'natto', label: '納豆' },
+  { value: 'mekabu', label: 'めかぶ' },
+];
 const categoryOptions: { value: FoodCategory; label: string }[] = [
   { value: 'staple', label: '主食' },
   { value: 'main', label: '主菜' },
@@ -39,7 +97,7 @@ const categoryOptions: { value: FoodCategory; label: string }[] = [
 ];
 
 const categoryValues = new Set(categoryOptions.map((option) => option.value));
-const conditionValues = new Set(conditionOptions.map((option) => option.value));
+const conditionValues = new Set([...conditionOptions, ...legacyConditionOptions].map((option) => option.value));
 
 const defaultInput: MealInput = {
   kcal: 550,
@@ -870,8 +928,40 @@ function LoadingSpinner() {
 
 function formatSelectedTags(tags: ConditionTag[]) {
   if (tags.length === 0) return '条件タグ：未選択';
-  const labels = tags.map((tag) => conditionOptions.find((option) => option.value === tag)?.label ?? tag);
+  const labels = tags.map((tag) => [...conditionOptions, ...legacyConditionOptions].find((option) => option.value === tag)?.label ?? tag);
   return `条件タグ：${labels.join('、')}`;
+}
+
+function ConditionTagGroups({
+  selectedTags,
+  onToggleTag,
+  selectable = false,
+}: {
+  selectedTags: ConditionTag[];
+  onToggleTag: (tag: ConditionTag) => void;
+  selectable?: boolean;
+}) {
+  return (
+    <div className={selectable ? 'tag-group-list selectable-tags' : 'tag-group-list'}>
+      {conditionGroups.map((group) => (
+        <section className="tag-group" key={group.title}>
+          <h3 className="tag-group-title">{group.title}</h3>
+          <div className="tag-grid">
+            {group.options.map((option) => (
+              <button
+                type="button"
+                className={selectedTags.includes(option.value) ? 'tag selected' : 'tag'}
+                key={option.value}
+                onClick={() => onToggleTag(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
 }
 
 function TagSelectorModal({
@@ -893,18 +983,7 @@ function TagSelectorModal({
           <p>献立に反映したい条件だけ選んでください。</p>
         </div>
         <div className="tag-selector-body">
-          <div className="tag-grid selectable-tags">
-            {conditionOptions.map((option) => (
-              <button
-                type="button"
-                className={selectedTags.includes(option.value) ? 'tag selected' : 'tag'}
-                key={option.value}
-                onClick={() => onToggleTag(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <ConditionTagGroups selectedTags={selectedTags} onToggleTag={onToggleTag} selectable />
         </div>
         <div className="replan-sheet-actions">
           <button className="secondary-action" type="button" onClick={onCancel}>
@@ -1023,18 +1102,7 @@ function MealConditionEditor({
           <span>{mealInput.tags.length}個</span>
         </div>
         <p className="field-help">タグは献立提案で利用します。必要なものだけ選んでください。</p>
-        <div className="tag-grid">
-          {conditionOptions.map((option) => (
-            <button
-              type="button"
-              className={mealInput.tags.includes(option.value) ? 'tag selected' : 'tag'}
-              key={option.value}
-              onClick={() => onToggleTag(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <ConditionTagGroups selectedTags={mealInput.tags} onToggleTag={onToggleTag} />
       </div>
       <FreeConditionField embedded value={freeCondition} onChange={onFreeConditionChange} />
     </section>
