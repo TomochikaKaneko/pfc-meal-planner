@@ -1,4 +1,5 @@
 export type MacroKey = 'kcal' | 'protein' | 'fat' | 'carb';
+export type MacroTargetMode = 'minimum' | 'target' | 'maximum';
 
 export type FoodCategory =
   | 'staple'
@@ -66,6 +67,10 @@ export interface Food extends MacroProfile {
 }
 
 export interface MealInput extends MacroTargetProfile {
+  calorieMode: MacroTargetMode;
+  proteinMode: MacroTargetMode;
+  fatMode: MacroTargetMode;
+  carbMode: MacroTargetMode;
   tags: ConditionTag[];
 }
 

@@ -5,6 +5,7 @@ import type {
   MacroDiffProfile,
   MacroKey,
   MacroProfile,
+  MacroTargetMode,
   MealCandidate,
   MealIngredient,
   MealInput,
@@ -302,7 +303,7 @@ function buildTemplateCandidates(
           const tunedItems = tuneWhiteRiceServing(withExtra, input);
           const totals = sumMacros(tunedItems.map((item) => item.macros));
           const diff = diffMacros(totals, input);
-          const macroFitScore = calculateFitScore(diff);
+          const macroFitScore = calculateFitScore(diff, input);
           const mealSatisfactionScore = calculateMealSatisfactionScore(tunedItems, intent);
           const mealNaturalnessScore = calculateMealNaturalnessScore(tunedItems);
           const fitScore = calculateCompositeFitScore(macroFitScore, mealSatisfactionScore, mealNaturalnessScore);
@@ -388,6 +389,9 @@ function addOptionalExtra(
 
 function tuneWhiteRiceServing(items: MealItem[], input: MealInput): MealItem[] {
   if (!hasMacroTarget(input, 'carb')) return items;
+  const currentCarb = sumMacros(items.map((item) => item.macros)).carb;
+  if (input.carbMode === 'maximum' && currentCarb <= input.carb) return items;
+  if (input.carbMode === 'minimum' && currentCarb >= input.carb) return items;
   const riceLocation = findRiceIngredient(items);
   if (!riceLocation) return items;
 
@@ -496,10 +500,10 @@ function scoreMeal(
   intent: FreeTextIntent,
   fitScore: number,
 ) {
-  const kcalScore = macroScore(diff, 'kcal', 220, 0.5);
-  const pScore = macroScore(diff, 'protein', 120, 4);
-  const fScore = macroScore(diff, 'fat', 95, 5.2);
-  const cScore = macroScore(diff, 'carb', 95, 2);
+  const kcalScore = macroScore(diff, input, 'kcal', 220, 0.5);
+  const pScore = macroScore(diff, input, 'protein', 120, 4);
+  const fScore = macroScore(diff, input, 'fat', 95, 5.2);
+  const cScore = macroScore(diff, input, 'carb', 95, 2);
   const selectedTags = expandTags(input.tags);
   const tagScore = items.flatMap((item) => item.recipe.tags).filter((tag) => selectedTags.includes(tag)).length * 42;
   const lowFatScore = input.tags.includes('low-fat') ? Math.max(0, 180 - totals.fat * 7) : 0;
@@ -532,9 +536,9 @@ function scoreMeal(
   );
 }
 
-function macroScore(diff: MacroDiffProfile, key: MacroKey, maxScore: number, penalty: number) {
+function macroScore(diff: MacroDiffProfile, input: MealInput, key: MacroKey, maxScore: number, penalty: number) {
   const value = diff[key];
-  return value === null ? 0 : Math.max(0, maxScore - Math.abs(value) * penalty);
+  return value === null ? 0 : Math.max(0, maxScore - macroModeDistance(value, key, getMacroTargetMode(input, key)) * penalty);
 }
 
 function getIntentWeight(fitScore: number) {
@@ -1361,19 +1365,56 @@ function getRoleRecipeName(candidate: MealCandidate, role: string) {
   return candidate.items.find((item) => item.role === role)?.recipe.name ?? '';
 }
 
-function calculateFitScore(diff: MacroDiffProfile) {
+function calculateFitScore(diff: MacroDiffProfile, input: MealInput) {
   const weights: Record<MacroKey, number> = { kcal: 0.08, protein: 2.5, fat: 3, carb: 1.4 };
   const specifiedKeys = macroKeys.filter((key) => diff[key] !== null);
   if (specifiedKeys.length === 0) return 50;
-  const distance = specifiedKeys.reduce((sum, key) => sum + Math.abs(diff[key] ?? 0) * weights[key], 0);
+  const distance = specifiedKeys.reduce((sum, key) => {
+    const value = diff[key];
+    return value === null ? sum : sum + macroModeDistance(value, key, getMacroTargetMode(input, key)) * weights[key];
+  }, 0);
   const rawScore = Math.max(1, Math.min(99, Math.round(100 - distance)));
   const kcalDiff = diff.kcal;
   if (kcalDiff === null) return rawScore;
-  const kcalGap = Math.abs(kcalDiff);
+  const kcalGap = macroModeDistance(kcalDiff, 'kcal', input.calorieMode);
   if (kcalGap >= 150) return Math.min(rawScore, 80);
   if (kcalGap >= 100) return Math.min(rawScore, 90);
   return rawScore;
 }
+
+function getMacroTargetMode(input: MealInput, key: MacroKey): MacroTargetMode {
+  if (key === 'kcal') return input.calorieMode ?? 'target';
+  if (key === 'protein') return input.proteinMode ?? 'target';
+  if (key === 'fat') return input.fatMode ?? 'target';
+  return input.carbMode ?? 'target';
+}
+
+function macroModeDistance(diff: number, key: MacroKey, mode: MacroTargetMode) {
+  if (mode === 'minimum') {
+    if (diff < 0) return Math.abs(diff) * 3;
+    const upperGrace = macroUpperGrace[key];
+    return diff <= upperGrace ? 0 : (diff - upperGrace) * 0.5;
+  }
+  if (mode === 'maximum') {
+    if (diff <= 0) return 0;
+    return diff * 2;
+  }
+  return Math.max(0, Math.abs(diff) - macroTargetTolerance[key]);
+}
+
+const macroTargetTolerance: Record<MacroKey, number> = {
+  kcal: 60,
+  protein: 2,
+  fat: 2,
+  carb: 5,
+};
+
+const macroUpperGrace: Record<MacroKey, number> = {
+  kcal: 100,
+  protein: 10,
+  fat: 5,
+  carb: 15,
+};
 
 function calculateCompositeFitScore(macroFitScore: number, mealSatisfactionScore: number, mealNaturalnessScore: number) {
   const blended = Math.round(macroFitScore * 0.78 + mealSatisfactionScore * 0.14 + mealNaturalnessScore * 0.08);

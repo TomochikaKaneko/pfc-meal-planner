@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { BookOpen, ChefHat, CircleHelp, Home, Plus, RefreshCw, Save, ShoppingCart, Sparkles, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
-import type { ConditionTag, Food, FoodCategory, MacroKey, MealCandidate, MealInput } from './types';
+import type { ConditionTag, Food, FoodCategory, MacroKey, MacroTargetMode, MealCandidate, MealInput } from './types';
 
 const USER_FOODS_KEY = 'pfc-meal-planner:user-foods';
 const LAST_INPUT_KEY = 'pfc-meal-planner:last-input';
@@ -44,6 +44,10 @@ const defaultInput: MealInput = {
   protein: 35,
   fat: 15,
   carb: 70,
+  calorieMode: 'target',
+  proteinMode: 'target',
+  fatMode: 'target',
+  carbMode: 'target',
   tags: [],
 };
 
@@ -127,6 +131,12 @@ export function App() {
     localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(next));
   }
 
+  function updateInputMode(key: MacroKey, mode: MacroTargetMode) {
+    const next = { ...mealInput, [macroModeField[key]]: mode };
+    setMealInput(next);
+    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(next));
+  }
+
   function updateTags(tags: ConditionTag[]) {
     const next = { ...mealInput, tags };
     setMealInput(next);
@@ -197,6 +207,10 @@ export function App() {
 
   function updateDraftInput(key: MacroKey, rawValue: string) {
     setDraftMealInput((current) => ({ ...current, [key]: parseMacroValue(rawValue) }));
+  }
+
+  function updateDraftInputMode(key: MacroKey, mode: MacroTargetMode) {
+    setDraftMealInput((current) => ({ ...current, [macroModeField[key]]: mode }));
   }
 
   function toggleDraftTag(tag: ConditionTag) {
@@ -367,7 +381,9 @@ export function App() {
                     label={field.label}
                     unit={field.unit}
                     value={mealInput[field.key]}
+                    mode={mealInput[macroModeField[field.key]]}
                     onChange={(value) => updateInput(field.key, value)}
+                    onModeChange={(mode) => updateInputMode(field.key, mode)}
                     onFocus={() => setNumericInputFocused(true)}
                     onBlur={() => window.setTimeout(() => setNumericInputFocused(false), 120)}
                   />
@@ -656,6 +672,7 @@ export function App() {
           mealInput={draftMealInput}
           freeCondition={draftFreeCondition}
           onMacroChange={updateDraftInput}
+          onMacroModeChange={updateDraftInputMode}
           onToggleTag={toggleDraftTag}
           onFreeConditionChange={setDraftFreeCondition}
           onCancel={() => setIsReplanModalOpen(false)}
@@ -691,14 +708,18 @@ function MacroInput({
   label,
   unit,
   value,
+  mode,
   onChange,
+  onModeChange,
   onFocus,
   onBlur,
 }: {
   label: string;
   unit?: string;
   value: number | null;
+  mode?: MacroTargetMode;
   onChange: (value: string) => void;
+  onModeChange?: (mode: MacroTargetMode) => void;
   onFocus: () => void;
   onBlur: () => void;
 }) {
@@ -724,6 +745,20 @@ function MacroInput({
           }}
         />
         {unit && <small>{unit}</small>}
+        {mode && onModeChange && (
+          <select
+            className="macro-mode-select"
+            value={mode}
+            aria-label={`${label}縺ｮ逶ｮ讓咏央莉ｶ`}
+            onChange={(event) => onModeChange(event.target.value as MacroTargetMode)}
+          >
+            {macroModeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
     </label>
   );
@@ -883,6 +918,7 @@ function ReplanConditionModal({
   mealInput,
   freeCondition,
   onMacroChange,
+  onMacroModeChange,
   onToggleTag,
   onFreeConditionChange,
   onCancel,
@@ -893,6 +929,7 @@ function ReplanConditionModal({
   mealInput: MealInput;
   freeCondition: string;
   onMacroChange: (key: MacroKey, value: string) => void;
+  onMacroModeChange: (key: MacroKey, mode: MacroTargetMode) => void;
   onToggleTag: (tag: ConditionTag) => void;
   onFreeConditionChange: (value: string) => void;
   onCancel: () => void;
@@ -913,6 +950,7 @@ function ReplanConditionModal({
             mealInput={mealInput}
             freeCondition={freeCondition}
             onMacroChange={onMacroChange}
+            onMacroModeChange={onMacroModeChange}
             onToggleTag={onToggleTag}
             onFreeConditionChange={onFreeConditionChange}
             onFocusNumber={onFocusNumber}
@@ -937,6 +975,7 @@ function MealConditionEditor({
   mealInput,
   freeCondition,
   onMacroChange,
+  onMacroModeChange,
   onToggleTag,
   onFreeConditionChange,
   onFocusNumber,
@@ -946,6 +985,7 @@ function MealConditionEditor({
   mealInput: MealInput;
   freeCondition: string;
   onMacroChange: (key: MacroKey, value: string) => void;
+  onMacroModeChange: (key: MacroKey, mode: MacroTargetMode) => void;
   onToggleTag: (tag: ConditionTag) => void;
   onFreeConditionChange: (value: string) => void;
   onFocusNumber: () => void;
@@ -964,7 +1004,9 @@ function MealConditionEditor({
             label={field.label}
             unit={field.unit}
             value={mealInput[field.key]}
+            mode={mealInput[macroModeField[field.key]]}
             onChange={(value) => onMacroChange(field.key, value)}
+            onModeChange={(mode) => onMacroModeChange(field.key, mode)}
             onFocus={onFocusNumber}
             onBlur={onBlurNumber}
           />
@@ -1313,6 +1355,19 @@ const macroFields = [
   { key: 'carb', label: '摂りたい炭水化物', unit: 'g' },
 ] as const;
 
+const macroModeField: Record<MacroKey, keyof Pick<MealInput, 'calorieMode' | 'proteinMode' | 'fatMode' | 'carbMode'>> = {
+  kcal: 'calorieMode',
+  protein: 'proteinMode',
+  fat: 'fatMode',
+  carb: 'carbMode',
+};
+
+const macroModeOptions: { value: MacroTargetMode; label: string }[] = [
+  { value: 'minimum', label: '以上' },
+  { value: 'target', label: '程度' },
+  { value: 'maximum', label: '以下' },
+];
+
 function categoryLabel(category: FoodCategory) {
   return categoryOptions.find((option) => option.value === category)?.label ?? category;
 }
@@ -1503,6 +1558,10 @@ function normalizeMealInput(value: unknown): MealInput {
     protein: normalizeMacroTarget(value.protein, defaultInput.protein),
     fat: normalizeMacroTarget(value.fat, defaultInput.fat),
     carb: normalizeMacroTarget(value.carb, defaultInput.carb),
+    calorieMode: normalizeMacroTargetMode(value.calorieMode, defaultInput.calorieMode),
+    proteinMode: normalizeMacroTargetMode(value.proteinMode, defaultInput.proteinMode),
+    fatMode: normalizeMacroTargetMode(value.fatMode, defaultInput.fatMode),
+    carbMode: normalizeMacroTargetMode(value.carbMode, defaultInput.carbMode),
     tags,
   };
 }
@@ -1565,6 +1624,10 @@ function normalizeMacroTarget(value: unknown, fallback: number | null) {
   if (typeof value === 'string' && value.trim() === '') return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
+}
+
+function normalizeMacroTargetMode(value: unknown, fallback: MacroTargetMode): MacroTargetMode {
+  return value === 'minimum' || value === 'target' || value === 'maximum' ? value : fallback;
 }
 
 function getDefaultFoodMealTiming(category: FoodCategory): Food['mealTiming'] {
