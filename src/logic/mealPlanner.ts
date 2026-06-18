@@ -1767,11 +1767,10 @@ function pickRepresentativeMealItem(items: MealItem[]) {
 
 function pickTitleMealItem(items: MealItem[]) {
   const staple = items.find((item) => item.role === '主食');
-  const namedStaple = staple && isNamedStapleDish(displayMealTitleName(staple.recipe));
-  if (namedStaple && canUseAsTitle(staple)) return staple;
-
   const main = items.find((item) => item.role === '主菜');
-  if (main && canUseAsTitle(main)) return main;
+
+  if (staple && isPrimaryStapleTitle(staple) && canUseAsTitle(staple)) return staple;
+  if (main && main.recipe.tags.includes('title:primary') && canUseAsTitle(main)) return main;
   if (staple && canUseAsTitle(staple)) return staple;
 
   return (
@@ -1783,7 +1782,28 @@ function pickTitleMealItem(items: MealItem[]) {
 }
 
 function canUseAsTitle(item: MealItem) {
-  return !item.recipe.tags.includes('title:avoid');
+  const tags = item.recipe.tags;
+  if (hasAnyTag(tags, ['title:avoid', 'role:support', 'role:seasoning'])) return false;
+  if (hasAnyTag(tags, ['title:primary', 'role:protagonist'])) return true;
+
+  const allIngredientsAreSupport = item.ingredients.every((ingredient) =>
+    hasAnyTag(ingredient.food.tags, ['title:avoid', 'role:support', 'role:seasoning']),
+  );
+  return !allIngredientsAreSupport;
+}
+
+function isPrimaryStapleTitle(item: MealItem) {
+  const tags = item.recipe.tags;
+  return (
+    tags.includes('title:primary') &&
+    (tags.includes('role:protagonist') ||
+      hasAnyTag(tags, ['style:bowl', 'style:pasta', 'style:yakisoba', 'style:noodle', 'style:bread']) ||
+      isNamedStapleDish(displayMealTitleName(item.recipe)))
+  );
+}
+
+function hasAnyTag(tags: string[], candidates: string[]) {
+  return candidates.some((tag) => tags.includes(tag));
 }
 
 function representativeDishScore(item: MealItem) {
