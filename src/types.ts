@@ -109,6 +109,7 @@ export interface MealItem {
 
 export interface MealCandidate {
   id: string;
+  mealKey: string;
   templateName: string;
   label: string;
   title: string;
@@ -121,4 +122,20 @@ export interface MealCandidate {
   mealNaturalnessScore: number;
   reason: string;
   caution: string;
+}
+
+export type MealHistorySource = 'suggestion' | 'detail' | 'shopping' | 'favorite' | 'adopted';
+
+export interface MealHistoryItem {
+  id: string;
+  mealKey: string;
+  title: string;
+  createdAt: string;
+  source: MealHistorySource;
+  macros?: MacroProfile;
+}
+
+export interface MealHistoryStorage {
+  schemaVersion: 1;
+  items: MealHistoryItem[];
 }

@@ -241,6 +241,7 @@ export function createMealCandidates(
   recipes: Recipe[] = initialRecipes,
   freeTextTerms: string[] = [],
   excludedFoodIds: string[] = [],
+  recentMealKeys: string[] = [],
 ): MealCandidate[] {
   const foodMap = new Map(foods.map((food) => [food.id, food]));
   const excludedFoodIdSet = new Set(excludedFoodIds);
@@ -258,7 +259,7 @@ export function createMealCandidates(
     .filter((candidate) => candidate.fitScore >= MIN_RECOMMENDED_FIT_SCORE)
     .filter((candidate) => isIntentCompatible(candidate, intent));
 
-  return diversifyCandidates(viableCandidates, input, intent).map((candidate, index) => ({
+  return diversifyCandidates(viableCandidates, input, intent, recentMealKeys).map((candidate, index) => ({
     ...candidate,
     id: `${candidate.id}-${index}`,
   }));
@@ -309,11 +310,14 @@ function buildTemplateCandidates(
           const fitScore = calculateCompositeFitScore(macroFitScore, mealSatisfactionScore, mealNaturalnessScore);
           const score = scoreMeal(template, tunedItems, totals, diff, input, intent, macroFitScore);
 
+          const title = buildMealTitle(template, tunedItems);
+
           candidates.push({
             id: `${template.id}-${selected.map((recipe) => recipe.id).join('-')}`,
+            mealKey: normalizeMealKey(title),
             templateName: template.name,
             label: classifyCandidate(template, tunedItems, input),
-            title: buildMealTitle(template, tunedItems),
+            title,
             items: tunedItems,
             totals,
             diff,
@@ -1120,7 +1124,7 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
   }
 }
 
-function diversifyCandidates(candidates: MealCandidate[], input: MealInput, intent: FreeTextIntent) {
+function diversifyCandidates(candidates: MealCandidate[], input: MealInput, intent: FreeTextIntent, recentMealKeys: string[]) {
   const pool = deduplicateByPrimaryDish(candidates.sort((a, b) => macroFitRank(b) - macroFitRank(a)));
   const selected: MealCandidate[] = [];
   const strategies: Array<{
@@ -1133,6 +1137,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) -
+        recentMealPenalty(candidate, recentMealKeys) -
         similarityPenalty(candidate, selected),
     },
     {
@@ -1143,6 +1148,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
         varietyScore(candidate, selected) +
         (hasMacroTarget(input, 'fat') && candidate.totals.fat <= input.fat ? 90 : 0) -
         candidate.totals.fat * 7 -
+        recentMealPenalty(candidate, recentMealKeys) -
         similarityPenalty(candidate, selected),
     },
     {
@@ -1153,6 +1159,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
         varietyScore(candidate, selected) +
         heartyMealShapeScore(candidate.items) +
         candidate.items.length * 12 -
+        recentMealPenalty(candidate, recentMealKeys) -
         similarityPenalty(candidate, selected),
     },
   ];
@@ -1166,6 +1173,12 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
   }
 
   return selected;
+}
+
+function recentMealPenalty(candidate: MealCandidate, recentMealKeys: string[]) {
+  const index = recentMealKeys.findIndex((mealKey) => mealKey === candidate.mealKey);
+  if (index === -1) return 0;
+  return Math.max(60, 160 - index * 8);
 }
 
 function similarityPenalty(candidate: MealCandidate, selected: MealCandidate[]) {
@@ -1749,6 +1762,17 @@ function buildMealTitle(template: MealTemplate, items: MealItem[]) {
 
   const name = displayMealTitleName(representative.recipe);
   return name;
+}
+
+export function normalizeMealKey(title: string) {
+  return title
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~。、，．・（）［］【】「」『』]/g, '')
+    .replace(/(?:定食|献立|セット|風)$/g, '')
+    .replace(/\d+(?:\.\d+)?g/g, '')
+    .trim();
 }
 
 function displayMealTitleName(recipe: Recipe) {

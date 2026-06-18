@@ -3,13 +3,15 @@ import type { ReactNode } from 'react';
 import { BookOpen, ChefHat, CircleHelp, Home, Plus, RefreshCw, Save, ShoppingCart, Sparkles, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
+import { storageKeys } from './storage/storageKeys';
+import { appendMealHistory, loadMealHistory, readStorageJson, writeStorageJson } from './storage/storageService';
 import type { ConditionTag, Food, FoodCategory, MacroKey, MacroTargetMode, MealCandidate, MealInput } from './types';
 
-const USER_FOODS_KEY = 'pfc-meal-planner:user-foods';
-const LAST_INPUT_KEY = 'pfc-meal-planner:last-input';
-const FREE_CONDITION_KEY = 'pfc-meal-planner:free-condition';
-const EXCLUDED_FOODS_KEY = 'pfcMealPlanner.excludedFoodIds';
-const SHOPPING_LIST_KEY = 'pfcMealPlanner.shoppingList';
+const USER_FOODS_KEY = storageKeys.userFoods;
+const LAST_INPUT_KEY = storageKeys.lastInput;
+const FREE_CONDITION_KEY = storageKeys.freeCondition;
+const EXCLUDED_FOODS_KEY = storageKeys.excludedFoodIds;
+const SHOPPING_LIST_KEY = storageKeys.shoppingList;
 
 const conditionOptions: { value: ConditionTag; label: string }[] = [
   { value: 'white-rice', label: '白米' },
@@ -72,7 +74,7 @@ interface ShoppingListItem {
 export function App() {
   const [tab, setTab] = useState<Tab>('home');
   const [mealInput, setMealInput] = useState<MealInput>(() => loadMealInput());
-  const [freeCondition, setFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
+  const [freeCondition, setFreeCondition] = useState(() => loadFreeCondition());
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
   const [excludedFoodIds, setExcludedFoodIds] = useState<string[]>(() => loadExcludedFoodIds());
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => loadShoppingList());
@@ -86,7 +88,7 @@ export function App() {
   const [numericInputFocused, setNumericInputFocused] = useState(false);
   const [isReplanModalOpen, setIsReplanModalOpen] = useState(false);
   const [draftMealInput, setDraftMealInput] = useState<MealInput>(() => loadMealInput());
-  const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadJson(FREE_CONDITION_KEY, ''));
+  const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadFreeCondition());
   const [savedReplanMealInput, setSavedReplanMealInput] = useState<MealInput | null>(null);
   const [savedReplanFreeCondition, setSavedReplanFreeCondition] = useState<string | null>(null);
   const [hasSavedReplanCondition, setHasSavedReplanCondition] = useState(false);
@@ -128,24 +130,24 @@ export function App() {
   function updateInput(key: MacroKey, rawValue: string) {
     const next = { ...mealInput, [key]: parseMacroValue(rawValue) };
     setMealInput(next);
-    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(next));
+    writeStorageJson(LAST_INPUT_KEY, next);
   }
 
   function updateInputMode(key: MacroKey, mode: MacroTargetMode) {
     const next = { ...mealInput, [macroModeField[key]]: mode };
     setMealInput(next);
-    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(next));
+    writeStorageJson(LAST_INPUT_KEY, next);
   }
 
   function updateTags(tags: ConditionTag[]) {
     const next = { ...mealInput, tags };
     setMealInput(next);
-    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(next));
+    writeStorageJson(LAST_INPUT_KEY, next);
   }
 
   function updateFreeCondition(value: string) {
     setFreeCondition(value);
-    localStorage.setItem(FREE_CONDITION_KEY, value);
+    writeStorageJson(FREE_CONDITION_KEY, value);
   }
 
   function toggleTag(tag: ConditionTag) {
@@ -188,8 +190,11 @@ export function App() {
       (acc, field) => ({ ...acc, [field.key]: normalizeMacroTarget(input[field.key], null) }),
       { ...input },
     );
-    const candidates = createMealCandidates(safeInput, foods, undefined, parseFreeCondition(condition), excludedFoodIds);
+    const mealHistory = loadMealHistory();
+    const recentMealKeys = mealHistory.items.map((item) => item.mealKey);
+    const candidates = createMealCandidates(safeInput, foods, undefined, parseFreeCondition(condition), excludedFoodIds, recentMealKeys);
     setResults(candidates);
+    appendMealHistory(candidates, 'suggestion');
     setHasGeneratedResults(true);
     setSelectedMeal(null);
     setShouldScrollToResults(true);
@@ -227,8 +232,8 @@ export function App() {
     setFreeCondition(nextFreeCondition);
     setSavedReplanMealInput(nextInput);
     setSavedReplanFreeCondition(nextFreeCondition);
-    localStorage.setItem(LAST_INPUT_KEY, JSON.stringify(nextInput));
-    localStorage.setItem(FREE_CONDITION_KEY, nextFreeCondition);
+    writeStorageJson(LAST_INPUT_KEY, nextInput);
+    writeStorageJson(FREE_CONDITION_KEY, nextFreeCondition);
     setHasSavedReplanCondition(true);
     setIsReplanModalOpen(false);
   }
@@ -267,7 +272,7 @@ export function App() {
 
     const nextFoods = [...userFoods, food];
     setUserFoods(nextFoods);
-    localStorage.setItem(USER_FOODS_KEY, JSON.stringify(nextFoods));
+    writeStorageJson(USER_FOODS_KEY, nextFoods);
     setFoodForm(emptyFoodForm);
     setTab('foods');
   }
@@ -275,11 +280,11 @@ export function App() {
   function deleteFood(id: string) {
     const nextFoods = userFoods.filter((food) => food.id !== id);
     setUserFoods(nextFoods);
-    localStorage.setItem(USER_FOODS_KEY, JSON.stringify(nextFoods));
+    writeStorageJson(USER_FOODS_KEY, nextFoods);
     if (excludedFoodIds.includes(id)) {
       const nextExcluded = excludedFoodIds.filter((foodId) => foodId !== id);
       setExcludedFoodIds(nextExcluded);
-      localStorage.setItem(EXCLUDED_FOODS_KEY, JSON.stringify(nextExcluded));
+      writeStorageJson(EXCLUDED_FOODS_KEY, nextExcluded);
     }
   }
 
@@ -288,12 +293,12 @@ export function App() {
       ? excludedFoodIds.filter((foodId) => foodId !== id)
       : [...excludedFoodIds, id];
     setExcludedFoodIds(nextExcluded);
-    localStorage.setItem(EXCLUDED_FOODS_KEY, JSON.stringify(nextExcluded));
+    writeStorageJson(EXCLUDED_FOODS_KEY, nextExcluded);
   }
 
   function updateShoppingList(nextList: ShoppingListItem[]) {
     setShoppingList(nextList);
-    localStorage.setItem(SHOPPING_LIST_KEY, JSON.stringify(nextList));
+    writeStorageJson(SHOPPING_LIST_KEY, nextList);
   }
 
   function addMealToShoppingList(names: string[]) {
@@ -1513,19 +1518,30 @@ function formatInputValue(value: number | null) {
 }
 
 function loadMealInput(): MealInput {
-  return normalizeMealInput(loadJson<unknown>(LAST_INPUT_KEY, defaultInput));
+  return normalizeMealInput(readStorageJson<unknown>(LAST_INPUT_KEY, defaultInput));
+}
+
+function loadFreeCondition() {
+  const rawValue = localStorage.getItem(FREE_CONDITION_KEY);
+  if (!rawValue) return '';
+  try {
+    const parsed = JSON.parse(rawValue);
+    return typeof parsed === 'string' ? parsed : '';
+  } catch {
+    return rawValue;
+  }
 }
 
 function loadUserFoods(): Food[] {
-  return normalizeUserFoods(loadJson<unknown>(USER_FOODS_KEY, []));
+  return normalizeUserFoods(readStorageJson<unknown>(USER_FOODS_KEY, []));
 }
 
 function loadExcludedFoodIds(): string[] {
-  return normalizeStringArray(loadJson<unknown>(EXCLUDED_FOODS_KEY, []));
+  return normalizeStringArray(readStorageJson<unknown>(EXCLUDED_FOODS_KEY, []));
 }
 
 function loadShoppingList(): ShoppingListItem[] {
-  return normalizeShoppingList(loadJson<unknown>(SHOPPING_LIST_KEY, []));
+  return normalizeShoppingList(readStorageJson<unknown>(SHOPPING_LIST_KEY, []));
 }
 
 function normalizeShoppingList(value: unknown): ShoppingListItem[] {
@@ -1636,13 +1652,4 @@ function getDefaultFoodMealTiming(category: FoodCategory): Food['mealTiming'] {
   if (category === 'seasoning') return ['breakfast', 'lunch', 'dinner'];
   if (category === 'main') return ['lunch', 'dinner'];
   return ['breakfast', 'lunch', 'dinner'];
-}
-
-function loadJson<T>(key: string, fallback: T): T {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? (JSON.parse(value) as T) : fallback;
-  } catch {
-    return fallback;
-  }
 }
