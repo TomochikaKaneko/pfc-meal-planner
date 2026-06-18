@@ -140,6 +140,21 @@ const tagAliases: Record<ConditionTag, string[]> = {
 const macroKeys = ['kcal', 'protein', 'fat', 'carb'] as const;
 const MIN_RECOMMENDED_FIT_SCORE = 30;
 const RECIPE_POOL_SIZES = [16, 16, 16, 5] as const;
+const supplementalFoodIds = new Set([
+  'boiled-egg',
+  'onsen-egg',
+  'natto',
+  'mekabu',
+  'oikos',
+  'greek-yogurt',
+  'fat-free-yogurt',
+  'protein',
+  'banana',
+  'apple',
+  'fat-free-milk',
+  'soy-milk',
+]);
+const snackLikeCategories: Recipe['category'][] = ['dairy', 'fruit', 'drink', 'snack', 'supplement'];
 const riceFriendlyMainTerms = [
   '焼肉',
   '生姜焼き',
@@ -523,6 +538,7 @@ function scoreMeal(
   const templateScore = items.some((item) => item.recipe.tags.includes(template.id)) ? 12 : 0;
   const intentScore = scoreMealIntent(items, totals, intent) * getIntentWeight(fitScore);
   const naturalnessPenalty = mealNaturalnessPenalty(items);
+  const mealStructureScore = scoreMealStructure(items, input);
 
   return round1(
     kcalScore +
@@ -536,7 +552,8 @@ function scoreMeal(
       structureScore +
       templateScore +
       intentScore -
-      naturalnessPenalty,
+      naturalnessPenalty +
+      mealStructureScore,
   );
 }
 
@@ -1479,7 +1496,97 @@ function mealNaturalnessPenalty(items: MealItem[]) {
 }
 
 function calculateMealNaturalnessScore(items: MealItem[]) {
-  return Math.max(0, Math.min(100, Math.round(100 - mealNaturalnessPenalty(items) / 12)));
+  return Math.max(0, Math.min(100, Math.round(100 - mealNaturalnessPenalty(items) / 12 + scoreMealStructure(items) / 10)));
+}
+
+function scoreMealStructure(items: MealItem[], input?: MealInput) {
+  const staple = items.find((item) => item.recipe.category === 'staple');
+  const hasOneDish = Boolean(staple && isOneDishRecipe(staple.recipe));
+  const hasMain = items.some((item) => item.recipe.category === 'main');
+  const hasSideOrSoup = items.some((item) => item.recipe.category === 'side' || item.recipe.category === 'soup');
+  const supplementalIngredients = items.flatMap((item) =>
+    item.ingredients.filter((ingredient) => isSupplementalIngredient(ingredient)),
+  );
+  const snackLikeItems = items.filter((item) => snackLikeCategories.includes(item.recipe.category));
+  const whiteRiceServing = getIngredientServing(items, 'white-rice');
+  const breadServing = getIngredientServing(items, 'bread');
+  const noodleServing = getNoodleServing(items);
+  const stapleCarb = sumIngredientCarb(items, (ingredient) => ingredient.food.category === 'staple');
+  const supplementalCarb = sumIngredientCarb(items, (ingredient) => isSupplementalIngredient(ingredient));
+  const lightMeal = isLightMealStructure(items);
+
+  let score = 0;
+
+  if (hasOneDish || (staple && hasMain)) score += 24;
+  if (hasSideOrSoup) score += 10;
+  if (stapleCarb >= 45 && supplementalCarb <= 22) score += 18;
+
+  if (!lightMeal) {
+    if (whiteRiceServing !== null && whiteRiceServing <= 100) score -= supplementalIngredients.length > 0 || snackLikeItems.length > 0 ? 130 : 75;
+    if (whiteRiceServing !== null && whiteRiceServing > 100 && whiteRiceServing < 140 && supplementalCarb >= 18) score -= 55;
+    if (breadServing !== null && breadServing < 1) score -= 80;
+    if (noodleServing !== null && noodleServing < 0.75) score -= 80;
+  }
+
+  if (supplementalIngredients.length > 2) score -= Math.min(120, (supplementalIngredients.length - 2) * 45);
+  if (snackLikeItems.length > 0 && stapleCarb < supplementalCarb && !lightMeal) score -= 85;
+  if (whiteRiceServing !== null && whiteRiceServing <= 120 && snackLikeItems.length > 0) score -= Math.min(110, snackLikeItems.length * 45);
+
+  if (staple && isRegularSandwich(staple)) {
+    if (breadServing === 1) score += 16;
+    if (breadServing !== null && breadServing >= 2) score -= 45;
+  }
+  if (staple && isHotSandwich(staple) && breadServing !== null && breadServing >= 2) score += 12;
+
+  if (input?.tags.includes('low-fat') && items.some((item) => item.ingredients.some((ingredient) => ingredient.food.id === 'chicken-breast'))) {
+    score += 14;
+  }
+
+  return Math.max(-220, Math.min(90, score));
+}
+
+function isSupplementalIngredient(ingredient: MealIngredient) {
+  return supplementalFoodIds.has(ingredient.food.id) || snackLikeCategories.includes(ingredient.food.category);
+}
+
+function getIngredientServing(items: MealItem[], foodId: string) {
+  const ingredient = items.flatMap((item) => item.ingredients).find((candidate) => candidate.food.id === foodId);
+  return ingredient?.serving ?? null;
+}
+
+function getNoodleServing(items: MealItem[]) {
+  const noodle = items
+    .flatMap((item) => item.ingredients)
+    .find((ingredient) => ['spaghetti', 'udon', 'soba', 'chinese-noodles', 'somen'].includes(ingredient.food.id));
+  if (!noodle) return null;
+  return noodle.food.servingUnit === 'g' ? noodle.serving / 100 : noodle.serving;
+}
+
+function sumIngredientCarb(items: MealItem[], predicate: (ingredient: MealIngredient) => boolean) {
+  return items
+    .flatMap((item) => item.ingredients)
+    .filter(predicate)
+    .reduce((sum, ingredient) => sum + ingredient.macros.carb, 0);
+}
+
+function isLightMealStructure(items: MealItem[]) {
+  return items.some((item) =>
+    snackLikeCategories.includes(item.recipe.category) ||
+    item.recipe.mealTiming.every((timing) => timing === 'breakfast' || timing === 'snack') ||
+    item.recipe.tags.some((tag) => ['scene:breakfast', 'scene:snack', 'trait:light', 'serving:smallSide'].includes(tag)),
+  );
+}
+
+function isRegularSandwich(item: MealItem) {
+  return (
+    item.recipe.id.includes('sandwich') ||
+    item.recipe.id.includes('sand') ||
+    (item.recipe.tags.includes('bread') && item.recipe.name.includes('サンド'))
+  ) && !isHotSandwich(item);
+}
+
+function isHotSandwich(item: MealItem) {
+  return item.recipe.id.includes('hot-sand') || item.recipe.name.includes('ホットサンド');
 }
 
 function supplementGroupPenalty(items: MealItem[]) {
