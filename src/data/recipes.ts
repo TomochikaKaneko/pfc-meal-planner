@@ -1153,11 +1153,95 @@ const practicalRecipeSeeds: RecipeSeed[] = [
   recipeSeed('kamaboko-tsukimi-soba', 'かまぼこ月見そば', 'staple', [{ foodId: 'soba', serving: 1 }, { foodId: 'kamaboko', serving: 50 }, { foodId: 'egg', serving: 1 }, { foodId: 'mentsuyu', serving: 1 }], ['noodle', 'soba', 'egg', 'processed-fish', 'japanese'], 'かまぼこと卵を合わせる家庭的な月見そばです。', 8),
 ];
 
+const naturalnessRecipeTags: Record<string, string[]> = {
+  'chicken-teriyaki': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'chicken-teriyaki-mirin': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'salmon-salt-set-main': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:low', 'genre:japanese', 'trait:highProtein', 'dish:standard'],
+  'salmon-mirin-miso': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:low', 'genre:japanese', 'trait:highProtein', 'dish:standard'],
+  'mapo-tofu-light': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:high', 'genre:chinese', 'trait:hearty', 'trait:highProtein', 'dish:standard'],
+  'chinjao-beef-light': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:medium', 'genre:chinese', 'trait:hearty', 'dish:standard'],
+  'chicken-chinjao': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:medium', 'genre:chinese', 'trait:hearty', 'trait:highProtein', 'dish:standard'],
+  'sasami-chinjao': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:medium', 'genre:chinese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'pork-fillet-chinjao': ['role:main', 'title:primary', 'style:setMeal', 'compat:rice:high', 'compat:bowl:medium', 'genre:chinese', 'trait:hearty', 'trait:lowFat', 'dish:standard'],
+  'oyakodon-chicken-breast': ['role:protagonist', 'title:primary', 'style:bowl', 'compat:rice:high', 'compat:bowl:high', 'genre:japanese', 'trait:hearty', 'trait:highProtein', 'dish:standard'],
+  'onsen-egg-chicken-oyakodon': ['role:protagonist', 'title:primary', 'style:bowl', 'compat:rice:high', 'compat:bowl:high', 'genre:japanese', 'trait:hearty', 'dish:standard'],
+  'konohadon-kamaboko': ['role:protagonist', 'title:primary', 'style:bowl', 'compat:rice:high', 'compat:bowl:high', 'genre:japanese', 'dish:standard'],
+  'beef-yakiniku-don-light': ['role:protagonist', 'title:primary', 'style:bowl', 'compat:rice:high', 'compat:bowl:high', 'trait:hearty', 'dish:standard'],
+  'pork-fillet-yakiniku-don': ['role:protagonist', 'title:primary', 'style:bowl', 'compat:rice:high', 'compat:bowl:high', 'trait:hearty', 'trait:lowFat', 'dish:standard'],
+  'chicken-yakiniku-don': ['role:protagonist', 'title:primary', 'style:bowl', 'compat:rice:high', 'compat:bowl:high', 'trait:hearty', 'trait:highProtein', 'dish:standard'],
+  'sasami-yakiniku-don': ['role:protagonist', 'title:primary', 'style:bowl', 'compat:rice:high', 'compat:bowl:high', 'trait:hearty', 'trait:lowFat', 'dish:standard'],
+  'chicken-yakisoba-practical': ['role:protagonist', 'title:primary', 'style:yakisoba', 'compat:noodle:high', 'genre:chinese', 'trait:hearty', 'trait:highProtein', 'dish:standard'],
+  'pork-fillet-yakisoba': ['role:protagonist', 'title:primary', 'style:yakisoba', 'compat:noodle:high', 'genre:chinese', 'trait:hearty', 'trait:lowFat', 'dish:standard'],
+  'seafood-yakisoba': ['role:protagonist', 'title:primary', 'style:yakisoba', 'compat:noodle:high', 'genre:chinese', 'trait:hearty', 'dish:standard'],
+  'shrimp-yakisoba-practical': ['role:protagonist', 'title:primary', 'style:yakisoba', 'compat:noodle:high', 'genre:chinese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'squid-yakisoba-practical': ['role:protagonist', 'title:primary', 'style:yakisoba', 'compat:noodle:high', 'genre:chinese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'chikuwa-yakisoba': ['role:protagonist', 'title:primary', 'style:yakisoba', 'compat:noodle:high', 'genre:chinese', 'trait:quick', 'dish:standard'],
+  'sasami-yakisoba': ['role:protagonist', 'title:primary', 'style:yakisoba', 'compat:noodle:high', 'genre:chinese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'chicken-peperoncino': ['role:protagonist', 'title:primary', 'style:pasta', 'compat:noodle:high', 'genre:western', 'trait:hearty', 'trait:highProtein', 'dish:standard'],
+  'tomato-chicken-pasta-practical': ['role:protagonist', 'title:primary', 'style:pasta', 'compat:noodle:high', 'genre:western', 'trait:hearty', 'trait:highProtein', 'dish:standard'],
+  'mentaiko-pasta': ['role:protagonist', 'title:primary', 'style:pasta', 'compat:noodle:high', 'genre:japanese', 'dish:standard'],
+  'tarako-pasta': ['role:protagonist', 'title:primary', 'style:pasta', 'compat:noodle:high', 'genre:japanese', 'dish:standard'],
+  'shirasu-pasta': ['role:protagonist', 'title:primary', 'style:pasta', 'compat:noodle:high', 'genre:japanese', 'trait:light', 'dish:standard'],
+  'scallop-pasta': ['role:protagonist', 'title:primary', 'style:pasta', 'compat:noodle:high', 'genre:western', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'pizza-toast-light': ['role:protagonist', 'title:primary', 'style:bread', 'genre:western', 'trait:quick', 'dish:standard'],
+  'wakame-ponzu': ['role:side', 'title:avoid', 'style:sideDish', 'compat:bowl:avoid', 'compat:ponzu:good', 'trait:light', 'serving:smallSide', 'dish:standard'],
+  'mini-tomato-olive': ['role:side', 'title:avoid', 'style:sideDish', 'compat:bowl:avoid', 'trait:light', 'serving:smallSide', 'dish:standard'],
+  'mini-tomato-cucumber': ['role:side', 'title:avoid', 'style:sideDish', 'compat:bowl:avoid', 'trait:light', 'serving:smallSide', 'dish:standard'],
+  'sasami-ponzu': ['role:side', 'title:conditional', 'style:sideDish', 'compat:rice:medium', 'compat:bowl:avoid', 'compat:ponzu:good', 'trait:light', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'broccoli-ponzu': ['role:side', 'title:avoid', 'style:sideDish', 'compat:bowl:avoid', 'compat:ponzu:good', 'trait:light', 'serving:smallSide', 'dish:standard'],
+  'cabbage-ponzu': ['role:side', 'title:avoid', 'style:sideDish', 'compat:bowl:avoid', 'compat:ponzu:good', 'trait:light', 'serving:smallSide', 'dish:standard'],
+  'tofu-ponzu': ['role:side', 'title:avoid', 'style:sideDish', 'compat:bowl:avoid', 'compat:ponzu:good', 'trait:light', 'serving:smallSide', 'dish:standard'],
+};
+
 export const initialRecipes: Recipe[] = [...recipeSeeds, ...practicalRecipeSeeds].map((recipe) => ({
   ...recipe,
+  tags: uniqueTags([
+    ...recipe.tags,
+    ...inferNaturalnessRecipeTags(recipe),
+    ...(naturalnessRecipeTags[recipe.id] ?? []),
+  ]),
   mealStyle: recipe.mealStyle ?? inferRecipeMealStyle(recipe.id, recipe.name, recipe.tags),
   mealTiming: recipe.mealTiming ?? inferMealTiming(recipe),
 }));
+
+function uniqueTags(tags: string[]) {
+  return [...new Set(tags)];
+}
+
+function inferNaturalnessRecipeTags(recipe: RecipeSeed) {
+  const mealStyle = recipe.mealStyle ?? inferRecipeMealStyle(recipe.id, recipe.name, recipe.tags);
+  const inferred: string[] = [];
+
+  if (recipe.category === 'side') inferred.push('role:side', 'title:avoid', 'style:sideDish', 'serving:smallSide');
+  if (recipe.category === 'soup') inferred.push('role:side', 'title:avoid');
+  if (['dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(recipe.category)) {
+    inferred.push('role:support', 'title:avoid', 'serving:smallSide');
+  }
+  if (recipe.category === 'seasoning') inferred.push('role:seasoning', 'title:avoid');
+
+  if (recipe.category === 'main') {
+    inferred.push('role:main', 'style:setMeal', 'title:primary', 'compat:rice:high');
+  }
+  if (recipe.category === 'staple') {
+    inferred.push(mealStyle === 'setMeal' ? 'title:conditional' : 'role:protagonist', mealStyle === 'setMeal' ? 'compat:rice:medium' : 'title:primary');
+  }
+  if (mealStyle === 'bowl') inferred.push('style:bowl', 'compat:bowl:high', 'compat:rice:high');
+  if (mealStyle === 'pasta') inferred.push('style:pasta', 'compat:noodle:high');
+  if (mealStyle === 'noodle') inferred.push('style:noodle', 'compat:noodle:high');
+  if (mealStyle === 'curry') inferred.push('style:bowl', 'compat:bowl:high', 'trait:hearty');
+
+  if (recipe.tags.includes('japanese')) inferred.push('genre:japanese');
+  if (recipe.tags.includes('western')) inferred.push('genre:western');
+  if (recipe.tags.includes('chinese')) inferred.push('genre:chinese');
+  if (recipe.tags.includes('korean')) inferred.push('genre:korean');
+  if (recipe.tags.includes('satisfying')) inferred.push('trait:hearty');
+  if (recipe.tags.includes('low-fat')) inferred.push('trait:lowFat');
+  if (recipe.tags.includes('high-protein')) inferred.push('trait:highProtein');
+  if (recipe.tags.includes('convenience')) inferred.push('trait:quick');
+
+  inferred.push('dish:standard');
+  return inferred;
+}
 
 function inferRecipeMealStyle(id: string, name: string, tags: string[]): Recipe['mealStyle'] {
   if (tags.includes('pasta')) return 'pasta';

@@ -1491,6 +1491,8 @@ function protagonistSuitabilityPenalty(items: MealItem[]) {
   if (!primary) return 0;
   const foodIds = primary.ingredients.map((ingredient) => ingredient.food.id);
   const tags = primary.recipe.tags;
+  if (tags.some((tag) => ['role:support', 'role:seasoning', 'title:avoid'].includes(tag))) return 320;
+  if (tags.some((tag) => ['role:protagonist', 'title:primary'].includes(tag))) return 0;
   const hasStrongProtein = foodIds.some((id) =>
     [
       'chicken-breast',
@@ -1525,6 +1527,15 @@ function getPrimaryMealItem(items: MealItem[]) {
 }
 
 function itemFoodStyle(item: MealItem): FoodStyle | null {
+  const naturalnessTags = item.recipe.tags;
+  if (naturalnessTags.includes('style:yakisoba')) return 'yakisoba';
+  if (naturalnessTags.includes('style:pasta')) return 'pasta';
+  if (naturalnessTags.includes('style:noodle') && naturalnessTags.includes('ramen')) return 'ramen';
+  if (naturalnessTags.includes('style:noodle') && naturalnessTags.includes('udon')) return 'udon';
+  if (naturalnessTags.includes('style:noodle') && naturalnessTags.includes('soba')) return 'soba';
+  if (naturalnessTags.includes('style:bowl')) return naturalnessTags.some((tag) => ['seafood', 'fish', 'sashimi'].includes(tag)) ? 'seafoodBowl' : 'bowl';
+  if (naturalnessTags.includes('style:sideDish')) return 'sideDish';
+  if (naturalnessTags.includes('style:setMeal')) return 'setMeal';
   const name = item.recipe.name;
   const tags = item.recipe.tags;
   if (tags.includes('yakisoba') || name.includes('焼きそば')) return 'yakisoba';
@@ -1547,11 +1558,18 @@ function itemStyleCompatibility(item: MealItem, style: FoodStyle) {
     .filter((ingredient) => ingredient.food.category !== 'seasoning' && ingredient.food.category !== 'staple')
     .map((ingredient) => foodStyleCompatibility[ingredient.food.id]?.[style])
     .filter((score): score is number => typeof score === 'number');
-  const foodScore = scores.length > 0 ? Math.min(...scores) : 75;
+  const tagScores = item.ingredients
+    .filter((ingredient) => ingredient.food.category !== 'staple')
+    .map((ingredient) => naturalnessStyleCompatibility(ingredient.food.tags, style))
+    .filter((score): score is number => typeof score === 'number');
+  const allFoodScores = [...scores, ...tagScores];
+  const foodScore = allFoodScores.length > 0 ? Math.min(...allFoodScores) : 75;
   return Math.min(foodScore, explicitRecipeScore);
 }
 
 function recipeStyleCompatibility(recipe: Recipe, style: FoodStyle) {
+  const tagScore = naturalnessStyleCompatibility(recipe.tags, style);
+  if (tagScore !== null) return tagScore;
   const name = recipe.name;
   if (name.includes('ポン酢') || name.includes('和え')) {
     if (style === 'setMeal' || style === 'sideDish') return 95;
@@ -1573,6 +1591,23 @@ function recipeStyleCompatibility(recipe: Recipe, style: FoodStyle) {
     if (style === 'yakisoba') return 80;
   }
   return 100;
+}
+
+function naturalnessStyleCompatibility(tags: string[], style: FoodStyle): number | null {
+  if (style === 'bowl' || style === 'seafoodBowl') {
+    if (tags.includes('compat:bowl:avoid')) return 0;
+    if (tags.includes('compat:bowl:low')) return 35;
+    if (tags.includes('compat:bowl:medium')) return 65;
+    if (tags.includes('compat:bowl:high')) return 100;
+  }
+  if (['pasta', 'yakisoba', 'ramen', 'udon', 'soba'].includes(style)) {
+    if (tags.includes('compat:noodle:avoid')) return 0;
+    if (tags.includes('compat:noodle:low')) return 35;
+    if (tags.includes('compat:noodle:high')) return 95;
+  }
+  if (tags.includes('compat:ponzu:avoid') && ['bowl', 'yakisoba', 'pasta'].includes(style)) return 0;
+  if (tags.includes('compat:ponzu:good') && (style === 'setMeal' || style === 'sideDish')) return 95;
+  return null;
 }
 
 function hasTerm(value: string, terms: string[]) {
@@ -1692,17 +1727,22 @@ function pickRepresentativeMealItem(items: MealItem[]) {
 function pickTitleMealItem(items: MealItem[]) {
   const staple = items.find((item) => item.role === '主食');
   const namedStaple = staple && isNamedStapleDish(displayMealTitleName(staple.recipe));
-  if (namedStaple) return staple;
+  if (namedStaple && canUseAsTitle(staple)) return staple;
 
   const main = items.find((item) => item.role === '主菜');
-  if (main) return main;
-  if (staple) return staple;
+  if (main && canUseAsTitle(main)) return main;
+  if (staple && canUseAsTitle(staple)) return staple;
 
   return (
-    items.find((item) => item.role === '副菜') ??
-    items.find((item) => item.role === '汁物') ??
+    items.find((item) => item.role === '副菜' && canUseAsTitle(item)) ??
+    items.find((item) => item.role === '汁物' && canUseAsTitle(item)) ??
+    items.find(canUseAsTitle) ??
     items[0]
   );
+}
+
+function canUseAsTitle(item: MealItem) {
+  return !item.recipe.tags.includes('title:avoid');
 }
 
 function representativeDishScore(item: MealItem) {
@@ -1716,12 +1756,18 @@ function representativeDishScore(item: MealItem) {
   const disallowedBowl = isDisallowedBowlRecipe(item.recipe);
 
   return (
+    (tags.includes('title:primary') ? 200 : 0) +
+    (tags.includes('title:conditional') ? 40 : 0) +
+    (tags.includes('role:protagonist') ? 120 : 0) +
     (namedStaple ? 160 : 0) +
     (specificStaple ? 160 : 0) +
     (genreDish ? 160 : 0) +
     (genreDish && item.role === '主菜' ? 110 : 0) +
     (fillingMain ? 70 : 0) +
     (item.role === '主菜' ? 30 : 0) -
+    (tags.includes('title:avoid') ? 500 : 0) -
+    (tags.includes('role:support') ? 180 : 0) -
+    (tags.includes('role:seasoning') ? 300 : 0) -
     (weakMain ? 180 : 0) -
     (disallowedBowl ? 260 : 0)
   );
@@ -1971,7 +2017,7 @@ function createDerivedRecipes(recipes: Recipe[], foodMap: Map<string, Food>): Re
     derived.push(recipe);
   };
 
-  safeMains.slice(0, 18).forEach((main) => add(createDerivedBowlRecipe(main)));
+  safeMains.filter(canDeriveBowlRecipe).slice(0, 18).forEach((main) => add(createDerivedBowlRecipe(main)));
   safeMains.filter(isPastaFriendlyMain).slice(0, 10).forEach((main) => add(createDerivedPastaRecipe(main)));
   safeMains.filter(isNoodleFriendlyMain).slice(0, 8).forEach((main) => {
     add(createDerivedUdonRecipe(main));
@@ -1990,6 +2036,10 @@ function isSafeDerivedMainRecipe(recipe: Recipe, foodMap: Map<string, Food>) {
   const hasSafeProteinTag = recipe.tags.some((tag) => ['chicken', 'beef', 'pork', 'fish', 'seafood', 'tofu', 'egg'].includes(tag));
   const onlyLightItems = foods.every((food) => ['side', 'soup', 'dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(food.category));
   return (hasSafeProtein || hasSafeProteinTag) && !onlyLightItems;
+}
+
+function canDeriveBowlRecipe(recipe: Recipe) {
+  return !recipe.tags.some((tag) => ['compat:bowl:avoid', 'role:support', 'role:seasoning', 'title:avoid'].includes(tag));
 }
 
 function baseDerivedDishName(recipe: Recipe) {

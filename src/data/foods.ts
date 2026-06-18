@@ -1463,11 +1463,42 @@ const defaultServingRules: Record<Food['category'], ServingRule> = {
   seasoning: { baseServing: 1, servingUnit: '回', minServing: 0, maxServing: 1, step: 1 },
 };
 
+const naturalnessFoodTags: Record<string, string[]> = {
+  'boiled-egg': ['role:support', 'title:avoid', 'style:sideDish', 'compat:rice:low', 'compat:bowl:medium', 'compat:noodle:high', 'serving:topping', 'scene:breakfast', 'trait:quick', 'dish:standard'],
+  'onsen-egg': ['role:support', 'title:avoid', 'style:sideDish', 'compat:rice:medium', 'compat:bowl:high', 'compat:noodle:high', 'serving:topping', 'scene:breakfast', 'trait:quick', 'dish:standard'],
+  natto: ['role:support', 'title:conditional', 'style:sideDish', 'compat:rice:high', 'compat:bowl:medium', 'compat:noodle:low', 'genre:japanese', 'scene:breakfast', 'serving:withRice', 'dish:standard'],
+  mekabu: ['role:support', 'role:side', 'title:avoid', 'style:sideDish', 'compat:rice:medium', 'compat:bowl:low', 'compat:noodle:low', 'trait:light', 'serving:smallSide', 'dish:standard'],
+  'silken-tofu': ['role:support', 'title:conditional', 'style:sideDish', 'compat:rice:low', 'compat:bowl:avoid', 'compat:noodle:low', 'trait:light', 'trait:lowFat', 'dish:standard'],
+  'firm-tofu': ['role:support', 'title:conditional', 'style:sideDish', 'compat:rice:medium', 'compat:bowl:low', 'compat:noodle:low', 'trait:light', 'trait:lowFat', 'dish:standard'],
+  'canned-tuna': ['role:support', 'title:conditional', 'compat:rice:medium', 'compat:bowl:low', 'compat:noodle:low', 'style:sideDish', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'mackerel-can': ['role:support', 'title:conditional', 'compat:rice:medium', 'compat:bowl:low', 'compat:noodle:low', 'style:sideDish', 'trait:highProtein', 'dish:standard'],
+  ponzu: ['role:seasoning', 'title:avoid', 'compat:ponzu:good', 'compat:bowl:avoid', 'compat:noodle:low', 'trait:light', 'genre:japanese', 'dish:standard'],
+  'mini-tomato': ['role:side', 'title:avoid', 'style:sideDish', 'compat:rice:low', 'compat:bowl:avoid', 'trait:light', 'serving:smallSide', 'dish:standard'],
+  oikos: ['role:support', 'title:avoid', 'compat:rice:low', 'compat:bowl:avoid', 'compat:noodle:avoid', 'trait:highProtein', 'trait:lowFat', 'scene:breakfast', 'scene:snack', 'serving:smallSide'],
+  'greek-yogurt': ['role:support', 'title:avoid', 'compat:rice:low', 'compat:bowl:avoid', 'compat:noodle:avoid', 'trait:highProtein', 'scene:breakfast', 'scene:snack', 'serving:smallSide'],
+  'fat-free-yogurt': ['role:support', 'title:avoid', 'compat:rice:low', 'compat:bowl:avoid', 'compat:noodle:avoid', 'trait:lowFat', 'scene:breakfast', 'scene:snack', 'serving:smallSide'],
+  'protein-powder': ['role:support', 'title:avoid', 'compat:rice:low', 'compat:bowl:avoid', 'compat:noodle:avoid', 'trait:highProtein', 'trait:lowFat', 'scene:snack', 'serving:smallSide'],
+  'chicken-breast': ['role:protagonist', 'role:main', 'title:primary', 'compat:rice:high', 'compat:bowl:high', 'compat:noodle:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  sasami: ['role:main', 'title:conditional', 'compat:rice:medium', 'compat:bowl:low', 'compat:noodle:high', 'trait:highProtein', 'trait:lowFat', 'trait:light', 'dish:standard'],
+  salmon: ['role:protagonist', 'role:main', 'title:primary', 'compat:rice:high', 'compat:bowl:medium', 'genre:japanese', 'trait:highProtein', 'dish:standard'],
+  'tuna-sashimi': ['role:protagonist', 'role:main', 'title:primary', 'compat:rice:medium', 'compat:bowl:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  shrimp: ['role:main', 'title:primary', 'compat:rice:medium', 'compat:bowl:high', 'compat:noodle:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'peeled-shrimp': ['role:main', 'title:primary', 'compat:rice:medium', 'compat:bowl:high', 'compat:noodle:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  'frozen-shrimp': ['role:main', 'title:primary', 'compat:rice:medium', 'compat:bowl:high', 'compat:noodle:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  squid: ['role:main', 'title:primary', 'compat:rice:medium', 'compat:bowl:high', 'compat:noodle:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+  scallop: ['role:main', 'title:primary', 'compat:rice:medium', 'compat:bowl:high', 'compat:noodle:high', 'genre:japanese', 'trait:highProtein', 'trait:lowFat', 'dish:standard'],
+};
+
 export const initialFoods: Food[] = foodSeeds.map((food) => ({
   ...food,
+  tags: uniqueTags([...food.tags, ...(naturalnessFoodTags[food.id] ?? [])]),
   mealTiming: food.mealTiming ?? inferFoodMealTiming(food.category),
   ...(servingRules[food.id] ?? defaultServingRules[food.category]),
 }));
+
+function uniqueTags(tags: string[]) {
+  return [...new Set(tags)];
+}
 
 function inferFoodMealTiming(category: Food['category']): MealTiming[] {
   if (category === 'dairy' || category === 'fruit' || category === 'snack' || category === 'supplement') return ['breakfast', 'snack'];
