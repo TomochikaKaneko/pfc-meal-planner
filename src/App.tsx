@@ -1376,13 +1376,9 @@ function MealDetailModal({
 
           <section className="detail-section recipe-link-section">
             <h3>レシピ</h3>
-            {recipeUrl ? (
-              <a className="recipe-link-button" href={recipeUrl} target="_blank" rel="noopener noreferrer">
-                レシピを見る
-              </a>
-            ) : (
-              <p className="muted-text">レシピURL準備中</p>
-            )}
+            <a className="recipe-link-button" href={recipeUrl} target="_blank" rel="noopener noreferrer">
+              🔍 レシピを検索
+            </a>
           </section>
           <section className="detail-section">
             <h3>理由</h3>
@@ -1409,7 +1405,10 @@ function getMealRecipeUrl(meal: MealCandidate) {
     meal.items.find((item) => item.role === '主食' && item.recipe.mealStyle && item.recipe.mealStyle !== 'setMeal') ??
     meal.items.find((item) => item.role === '主菜') ??
     meal.items.find((item) => item.recipe.recipeUrl.trim().length > 0);
-  return primaryItem?.recipe.recipeUrl.trim() ?? '';
+  const recipeUrl = primaryItem?.recipe.recipeUrl.trim();
+  if (recipeUrl) return recipeUrl;
+  const recipeName = primaryItem?.recipe.name ?? meal.title;
+  return `https://www.google.com/search?q=${encodeURIComponent(`${recipeName} レシピ`)}`;
 }
 
 function MacroResult({ field, meal }: { field: (typeof macroFields)[number]; meal: MealCandidate }) {

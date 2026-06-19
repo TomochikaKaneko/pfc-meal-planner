@@ -4,9 +4,6 @@ type RecipeSeed = Omit<Recipe, 'mealTiming'> & {
   mealTiming?: MealTiming[];
 };
 
-const previewRecipeUrl = 'https://memory-apkun.vercel.app/';
-const previewRecipeUrlIds = new Set(['reviewed-yakitori-don', 'reviewed-chicken-meatball-hotpot', 'reviewed-gapao-rice']);
-
 const recipeSeeds: RecipeSeed[] = [
   {
     id: 'white-rice-bowl',
@@ -857,7 +854,6 @@ const recipeSeeds: RecipeSeed[] = [
 function recipeSearchUrl(name: string) {
   return `https://www.google.com/search?q=${encodeURIComponent(`${name} レシピ`)}`;
 }
-
 function recipeSeed(
   id: string,
   name: string,
@@ -1230,7 +1226,6 @@ const naturalnessRecipeTags: Record<string, string[]> = {
 
 export const initialRecipes: Recipe[] = [...recipeSeeds, ...practicalRecipeSeeds].map((recipe) => ({
   ...recipe,
-  recipeUrl: previewRecipeUrlIds.has(recipe.id) ? previewRecipeUrl : recipe.recipeUrl,
   tags: uniqueTags([
     ...recipe.tags,
     ...inferNaturalnessRecipeTags(recipe),
