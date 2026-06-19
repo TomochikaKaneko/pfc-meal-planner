@@ -123,6 +123,7 @@ const emptyFoodForm = {
 };
 
 type Tab = 'home' | 'results' | 'foods' | 'shopping' | 'guide';
+type MealPlanMode = 'single' | 'daily';
 
 interface ShoppingListItem {
   name: string;
@@ -132,6 +133,7 @@ interface ShoppingListItem {
 export function App() {
   const [tab, setTab] = useState<Tab>('home');
   const [mealInput, setMealInput] = useState<MealInput>(() => loadMealInput());
+  const [mealPlanMode, setMealPlanMode] = useState<MealPlanMode>('single');
   const [freeCondition, setFreeCondition] = useState(() => loadFreeCondition());
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
   const [excludedFoodIds, setExcludedFoodIds] = useState<string[]>(() => loadExcludedFoodIds());
@@ -146,6 +148,7 @@ export function App() {
   const [numericInputFocused, setNumericInputFocused] = useState(false);
   const [isReplanModalOpen, setIsReplanModalOpen] = useState(false);
   const [draftMealInput, setDraftMealInput] = useState<MealInput>(() => loadMealInput());
+  const [draftMealPlanMode, setDraftMealPlanMode] = useState<MealPlanMode>('single');
   const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadFreeCondition());
   const [savedReplanMealInput, setSavedReplanMealInput] = useState<MealInput | null>(null);
   const [savedReplanFreeCondition, setSavedReplanFreeCondition] = useState<string | null>(null);
@@ -264,6 +267,7 @@ export function App() {
 
   function openReplanModal() {
     setDraftMealInput(savedReplanMealInput ?? mealInput);
+    setDraftMealPlanMode(mealPlanMode);
     setDraftFreeCondition(savedReplanFreeCondition ?? freeCondition);
     setIsReplanModalOpen(true);
   }
@@ -287,6 +291,7 @@ export function App() {
     const nextInput = { ...draftMealInput, tags: [...draftMealInput.tags] };
     const nextFreeCondition = draftFreeCondition;
     setMealInput(nextInput);
+    setMealPlanMode(draftMealPlanMode);
     setFreeCondition(nextFreeCondition);
     setSavedReplanMealInput(nextInput);
     setSavedReplanFreeCondition(nextFreeCondition);
@@ -381,7 +386,7 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={mealPlanMode === 'daily' ? 'app-shell daily-mode' : 'app-shell single-mode'}>
       <header className="app-header">
         <div>
           <p className="eyebrow">PWA meal assistant</p>
@@ -424,6 +429,8 @@ export function App() {
               <Sparkles size={26} />
             </div>
 
+            <MealPlanModeSwitch value={mealPlanMode} onChange={setMealPlanMode} />
+
             {!isStandalone && (
               <section className="install-tip">
                 <strong>ホーム画面に追加するとアプリのように利用できます</strong>
@@ -434,8 +441,8 @@ export function App() {
 
             <section className="panel">
               <div className="section-title vertical">
-                <h2>この食事で摂りたい目安</h2>
-                <p>今日の残りや、この1食で摂りたい kcal / P / F / C を入力してください。</p>
+                <h2>{mealPlanModeHeading(mealPlanMode)}</h2>
+                <p>{mealPlanModeDescription(mealPlanMode)}</p>
               </div>
               <div className="macro-grid with-heading">
                 {macroFields.map((field) => (
@@ -732,8 +739,10 @@ export function App() {
 
       {isReplanModalOpen && (
         <ReplanConditionModal
+          mealPlanMode={draftMealPlanMode}
           mealInput={draftMealInput}
           freeCondition={draftFreeCondition}
+          onMealPlanModeChange={setDraftMealPlanMode}
           onMacroChange={updateDraftInput}
           onMacroModeChange={updateDraftInputMode}
           onToggleTag={toggleDraftTag}
@@ -824,6 +833,27 @@ function MacroInput({
         )}
       </div>
     </label>
+  );
+}
+
+function MealPlanModeSwitch({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: MealPlanMode;
+  onChange: (mode: MealPlanMode) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={compact ? 'meal-plan-mode-switch compact' : 'meal-plan-mode-switch'} aria-label="献立モード">
+      <button className={value === 'single' ? 'selected' : ''} type="button" onClick={() => onChange('single')}>
+        1食献立
+      </button>
+      <button className={value === 'daily' ? 'selected' : ''} type="button" onClick={() => onChange('daily')}>
+        1日献立
+      </button>
+    </div>
   );
 }
 
@@ -999,8 +1029,10 @@ function TagSelectorModal({
 }
 
 function ReplanConditionModal({
+  mealPlanMode,
   mealInput,
   freeCondition,
+  onMealPlanModeChange,
   onMacroChange,
   onMacroModeChange,
   onToggleTag,
@@ -1010,8 +1042,10 @@ function ReplanConditionModal({
   onFocusNumber,
   onBlurNumber,
 }: {
+  mealPlanMode: MealPlanMode;
   mealInput: MealInput;
   freeCondition: string;
+  onMealPlanModeChange: (mode: MealPlanMode) => void;
   onMacroChange: (key: MacroKey, value: string) => void;
   onMacroModeChange: (key: MacroKey, mode: MacroTargetMode) => void;
   onToggleTag: (tag: ConditionTag) => void;
@@ -1031,8 +1065,10 @@ function ReplanConditionModal({
         <div className="replan-sheet-body">
           <MealConditionEditor
             compact
+            mealPlanMode={mealPlanMode}
             mealInput={mealInput}
             freeCondition={freeCondition}
+            onMealPlanModeChange={onMealPlanModeChange}
             onMacroChange={onMacroChange}
             onMacroModeChange={onMacroModeChange}
             onToggleTag={onToggleTag}
@@ -1056,8 +1092,10 @@ function ReplanConditionModal({
 
 function MealConditionEditor({
   compact = false,
+  mealPlanMode,
   mealInput,
   freeCondition,
+  onMealPlanModeChange,
   onMacroChange,
   onMacroModeChange,
   onToggleTag,
@@ -1066,8 +1104,10 @@ function MealConditionEditor({
   onBlurNumber,
 }: {
   compact?: boolean;
+  mealPlanMode: MealPlanMode;
   mealInput: MealInput;
   freeCondition: string;
+  onMealPlanModeChange: (mode: MealPlanMode) => void;
   onMacroChange: (key: MacroKey, value: string) => void;
   onMacroModeChange: (key: MacroKey, mode: MacroTargetMode) => void;
   onToggleTag: (tag: ConditionTag) => void;
@@ -1077,9 +1117,10 @@ function MealConditionEditor({
 }) {
   return (
     <section className={compact ? 'panel condition-editor compact-editor' : 'panel condition-editor'}>
+      <MealPlanModeSwitch value={mealPlanMode} onChange={onMealPlanModeChange} compact />
       <div className="section-title vertical">
-        <h2>{compact ? '条件を編集' : 'この食事で摂りたい目安'}</h2>
-        <p>今日の残りや、この1食で摂りたい kcal / P / F / C と食べたい条件を入力してください。</p>
+        <h2>{compact ? '条件を編集' : mealPlanModeHeading(mealPlanMode)}</h2>
+        <p>{mealPlanModeDescription(mealPlanMode)}</p>
       </div>
       <div className="macro-grid with-heading">
         {macroFields.map((field) => (
@@ -1453,6 +1494,16 @@ const macroModeOptions: { value: MacroTargetMode; label: string }[] = [
   { value: 'target', label: '程度' },
   { value: 'maximum', label: '以下' },
 ];
+
+function mealPlanModeHeading(mode: MealPlanMode) {
+  return mode === 'daily' ? '1日で摂りたい目安' : 'この食事で摂りたい目安';
+}
+
+function mealPlanModeDescription(mode: MealPlanMode) {
+  return mode === 'daily'
+    ? '1日で摂りたい kcal / P / F / C を入力してください。'
+    : '今日の残りや、この1食で摂りたい kcal / P / F / C を入力してください。';
+}
 
 function categoryLabel(category: FoodCategory) {
   return categoryOptions.find((option) => option.value === category)?.label ?? category;

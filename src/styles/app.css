@@ -48,6 +48,22 @@ button {
   padding: max(16px, env(safe-area-inset-top)) 18px calc(92px + env(safe-area-inset-bottom));
 }
 
+.app-shell.daily-mode {
+  background: linear-gradient(180deg, #fffaf2 0%, #fbf0df 54%, #f5e7d3 100%);
+}
+
+.app-shell.daily-mode .hero-panel,
+.app-shell.daily-mode .header-icon-button,
+.app-shell.daily-mode .primary-action,
+.app-shell.daily-mode .nav-button.active {
+  background: #c7763d;
+}
+
+.app-shell.daily-mode .app-mark {
+  background: #c7763d;
+  box-shadow: 0 12px 28px rgba(164, 91, 43, 0.2);
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -308,6 +324,57 @@ button {
 .home-screen .hero-panel h2 {
   font-size: 1rem;
   line-height: 1.2;
+}
+
+.meal-plan-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid rgba(47, 125, 104, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 22px rgba(40, 79, 65, 0.06);
+}
+
+.meal-plan-mode-switch.compact {
+  margin-bottom: 10px;
+  box-shadow: none;
+}
+
+.meal-plan-mode-switch button {
+  min-height: 34px;
+  border: 1px solid rgba(47, 125, 104, 0.18);
+  border-radius: 8px;
+  color: #557168;
+  background: #f6faf7;
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.meal-plan-mode-switch button.selected {
+  color: #ffffff;
+  border-color: rgba(47, 125, 104, 0.35);
+  background: #2f7d68;
+  box-shadow: 0 8px 18px rgba(47, 125, 104, 0.16);
+}
+
+.daily-mode .meal-plan-mode-switch {
+  border-color: rgba(199, 118, 61, 0.18);
+  background: rgba(255, 250, 242, 0.82);
+}
+
+.daily-mode .meal-plan-mode-switch button {
+  color: #8a5a35;
+  border-color: rgba(199, 118, 61, 0.22);
+  background: #fff8ef;
+}
+
+.daily-mode .meal-plan-mode-switch button.selected {
+  color: #ffffff;
+  border-color: rgba(199, 118, 61, 0.4);
+  background: #c7763d;
+  box-shadow: 0 8px 18px rgba(199, 118, 61, 0.18);
 }
 
 .home-screen .install-tip {
