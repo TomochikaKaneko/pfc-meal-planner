@@ -1245,6 +1245,7 @@ function MealDetailModal({
   const ingredientNames = getUniqueIngredientNames(meal);
   const [selectedIngredientNames, setSelectedIngredientNames] = useState<string[]>([]);
   const [addMessage, setAddMessage] = useState('');
+  const recipeUrl = getMealRecipeUrl(meal);
 
   useEffect(() => {
     const scrollY = window.scrollY;
@@ -1373,11 +1374,16 @@ function MealDetailModal({
             </ul>
           </section>
 
-          <section className="detail-section">
-            <h3>参考レシピ</h3>
-            <p className="muted-text">今後追加予定です。</p>
+          <section className="detail-section recipe-link-section">
+            <h3>レシピ</h3>
+            {recipeUrl ? (
+              <a className="recipe-link-button" href={recipeUrl} target="_blank" rel="noopener noreferrer">
+                レシピを見る
+              </a>
+            ) : (
+              <p className="muted-text">レシピURL準備中</p>
+            )}
           </section>
-
           <section className="detail-section">
             <h3>理由</h3>
             <p>{meal.reason}</p>
@@ -1396,6 +1402,14 @@ function MealDetailModal({
 
 function getUniqueIngredientNames(meal: MealCandidate) {
   return Array.from(new Set(meal.items.flatMap((item) => item.ingredients.map((ingredient) => ingredient.food.name))));
+}
+
+function getMealRecipeUrl(meal: MealCandidate) {
+  const primaryItem =
+    meal.items.find((item) => item.role === '主食' && item.recipe.mealStyle && item.recipe.mealStyle !== 'setMeal') ??
+    meal.items.find((item) => item.role === '主菜') ??
+    meal.items.find((item) => item.recipe.recipeUrl.trim().length > 0);
+  return primaryItem?.recipe.recipeUrl.trim() ?? '';
 }
 
 function MacroResult({ field, meal }: { field: (typeof macroFields)[number]; meal: MealCandidate }) {

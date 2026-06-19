@@ -1004,6 +1004,26 @@ button {
   font-size: 0.92rem;
 }
 
+.recipe-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  min-height: 42px;
+  border: 1px solid rgba(47, 125, 104, 0.22);
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #2f7d68;
+  background: #f5faf7;
+  font-size: 0.9rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.recipe-link-button:active {
+  transform: translateY(1px);
+}
+
 .detail-macro-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
