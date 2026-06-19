@@ -1382,6 +1382,8 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
       return hasTerm(['冷やし中華']);
     case 'yakisoba':
       return hasPrimaryTag(['yakisoba']) || hasPrimaryTerm(['焼きそば']);
+    case 'bread':
+      return hasPrimaryTag(['bread', 'style:bread']) || hasPrimaryTerm(['パン', 'トースト', 'サンド', 'ホットサンド', 'ピザトースト', '食パン', 'フランスパン', 'ロールパン']);
     case 'natto':
       return hasPrimaryTag(['natto']) || hasPrimaryTerm(['\u7d0d\u8c46', '\u306a\u3063\u3068\u3046']);
     case 'meat':
@@ -1399,7 +1401,9 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
     case 'oyakodon':
       return hasPrimaryTerm(['親子丼', 'おやこ丼', '牛とじ丼', '豚玉丼', '木の葉丼', '天津飯', 'かに玉']);
     case 'western':
-      return hasPrimaryTag(['western', 'pasta']) || hasPrimaryTerm(['洋食', 'イタリアン', 'パスタ', 'グラタン', 'ハンバーグ']);
+      return hasPrimaryTag(['western', 'genre:western', 'pasta']) || hasPrimaryTerm(['洋食', 'イタリアン', 'パスタ', 'グラタン', 'ハンバーグ', 'チキンステーキ', 'ピカタ', 'オムライス']);
+    case 'ethnic':
+      return hasPrimaryTag(['ethnic', 'genre:ethnic', 'thai', 'discover:discovery']) || hasPrimaryTerm(['エスニック', 'ガパオ', 'ラープ', 'フムス', 'ムサカ', 'クスクス', 'シャクシュカ', 'ナンプラー']);
     case 'curry':
       return hasTerm(['カレー']);
     case 'yakiniku':
@@ -1408,6 +1412,8 @@ function candidateMatchesMood(candidate: MealCandidate, tags: string[], searchTe
       return hasTerm(['寿司', 'すし', '鮨']);
     case 'hotpot':
       return hasTerm(['鍋', 'チゲ', 'スンドゥブ', '湯豆腐', '豚汁']) || (hasTag(['soup']) && hasTag(['tofu', 'pork', 'korean']));
+    case 'one-dish':
+      return hasPrimaryTag(['role:protagonist', 'trait:oneDish', 'style:bowl', 'style:pasta', 'style:noodle', 'style:bread']) || Boolean(getPrimaryDishItem(candidate));
     case 'stir-fry':
       return hasTerm(['炒め', '炒飯', 'チャーハン', '回鍋肉', '青椒肉絲', 'タッカルビ', '豚キムチ']);
     case 'spicy':
@@ -1448,6 +1454,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
       label: '高タンパク案',
       rank: (candidate) =>
         candidateKeywordIntentRank(candidate, intent) * 1.25 +
+        candidateGenreConsistencyRank(candidate, intent) +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) -
@@ -1458,6 +1465,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
       label: '低脂質案',
       rank: (candidate) =>
         candidateKeywordIntentRank(candidate, intent) * 1.25 +
+        candidateGenreConsistencyRank(candidate, intent) +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) +
@@ -1470,6 +1478,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
       label: '満足感重視案',
       rank: (candidate) =>
         candidateKeywordIntentRank(candidate, intent) * 1.25 +
+        candidateGenreConsistencyRank(candidate, intent) +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) +
@@ -1675,6 +1684,33 @@ function candidateKeywordIntentRank(candidate: MealCandidate, intent: FreeTextIn
   );
 }
 
+function candidateGenreConsistencyRank(candidate: MealCandidate, intent: FreeTextIntent) {
+  const genreMoods = ['ethnic', 'western', 'japanese', 'chinese', 'korean', 'izakaya'] as const;
+  const active = genreMoods.filter((mood) => intent.moods.includes(mood));
+  if (active.length === 0) return 0;
+
+  const tags = candidate.items.flatMap((item) => item.recipe.tags);
+  const primary = getPrimaryDishItem(candidate);
+  const primaryTags = primary?.recipe.tags ?? [];
+  const hasGenre = (mood: string, tagSource: string[]) => {
+    if (mood === 'ethnic') return tagSource.some((tag) => ['ethnic', 'genre:ethnic', 'thai', 'discover:discovery'].includes(tag));
+    if (mood === 'western') return tagSource.some((tag) => ['western', 'genre:western'].includes(tag));
+    if (mood === 'japanese') return tagSource.some((tag) => ['japanese', 'genre:japanese'].includes(tag));
+    if (mood === 'chinese') return tagSource.some((tag) => ['chinese', 'genre:chinese'].includes(tag));
+    if (mood === 'korean') return tagSource.some((tag) => ['korean', 'genre:korean', 'kimchi'].includes(tag));
+    if (mood === 'izakaya') return tagSource.some((tag) => ['izakaya', 'genre:izakaya'].includes(tag));
+    return false;
+  };
+
+  return active.reduce((score, mood) => {
+    const primaryMatch = hasGenre(mood, primaryTags);
+    const mealMatch = hasGenre(mood, tags);
+    if (primaryMatch) return score + 780;
+    if (mealMatch) return score + 420;
+    return score - 760;
+  }, 0);
+}
+
 function hasSimilarRecipeName(a: MealCandidate, b: MealCandidate) {
   const aNames = a.items.map((item) => normalizeRecipeName(item.recipe.name));
   const bNames = b.items.map((item) => normalizeRecipeName(item.recipe.name));
@@ -1804,7 +1840,9 @@ function mealNaturalnessPenalty(items: MealItem[]) {
     riceCompatibilityPenalty(items) +
     disallowedBowlPenalty(items) +
     foodStyleCompatibilityPenalty(items) +
-    protagonistSuitabilityPenalty(items)
+    protagonistSuitabilityPenalty(items) +
+    protagonistConflictPenalty(items) +
+    titleNaturalnessPenalty(items)
   );
 }
 
@@ -2051,6 +2089,38 @@ function protagonistSuitabilityPenalty(items: MealItem[]) {
   if (hasStrongProtein || hasStrongDishTag || hasTerm(primary.recipe.name, riceFriendlyMainTerms)) return 0;
   const supplementIds = ['mekabu', 'natto', 'onsen-egg', 'boiled-egg', 'silken-tofu', 'firm-tofu', 'oikos', 'greek-yogurt', 'fat-free-yogurt', 'protein', 'canned-tuna', 'mackerel-can'];
   return foodIds.some((id) => supplementIds.includes(id)) ? 300 : 0;
+}
+
+function protagonistConflictPenalty(items: MealItem[]) {
+  const protagonists = items.filter(isProtagonistLikeItem);
+  if (protagonists.length <= 1) return 0;
+
+  const primary = getPrimaryMealItem(items);
+  const nonPrimaryProtagonists = protagonists.filter((item) => item !== primary);
+  const strongConflicts = nonPrimaryProtagonists.filter((item) => item.recipe.category === 'main' || isOneDishRecipe(item.recipe)).length;
+  return Math.min(720, strongConflicts * 320 + Math.max(0, protagonists.length - 2) * 180);
+}
+
+function isProtagonistLikeItem(item: MealItem) {
+  const tags = item.recipe.tags;
+  if (hasAnyTag(tags, ['role:support', 'role:seasoning', 'title:avoid'])) return false;
+  if (item.recipe.category === 'soup' || item.recipe.category === 'side') return false;
+  if (isOneDishRecipe(item.recipe)) return true;
+  if (hasAnyTag(tags, ['role:protagonist', 'trait:oneDish'])) return true;
+  if (item.recipe.category === 'main' && hasAnyTag(tags, ['title:primary', 'role:main'])) return true;
+  return item.recipe.category === 'staple' && isNamedStapleDish(item.recipe.name);
+}
+
+function titleNaturalnessPenalty(items: MealItem[]) {
+  return items.reduce((penalty, item) => {
+    const name = item.recipe.name;
+    const tags = item.recipe.tags;
+    const internalTitlePenalty = /用|風$/.test(name) ? 90 : 0;
+    const platePenalty = name.includes('プレート') && !hasAnyTag(tags, ['role:protagonist', 'trait:oneDish']) ? 55 : 0;
+    const supportTitlePenalty = hasAnyTag(tags, ['role:support', 'title:avoid']) && item.recipe.category !== 'side' ? 120 : 0;
+    const conditionalMainPenalty = item.recipe.category === 'main' && tags.includes('title:conditional') ? 45 : 0;
+    return penalty + internalTitlePenalty + platePenalty + supportTitlePenalty + conditionalMainPenalty;
+  }, 0);
 }
 
 function getPrimaryMealItem(items: MealItem[]) {
