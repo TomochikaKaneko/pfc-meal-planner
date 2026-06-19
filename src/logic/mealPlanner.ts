@@ -130,7 +130,7 @@ const tagAliases: Record<ConditionTag, string[]> = {
   barley: ['barley', 'rice', 'fiber'],
   rice: ['white-rice', 'rice', 'compat:rice:high', 'style:setMeal'],
   'rice-bowl': ['rice-bowl', 'bowl', 'style:bowl', 'compat:bowl:high', 'white-rice', 'rice'],
-  bread: ['bread', 'style:bread', 'western'],
+  bread: ['bread', 'style:bread'],
   noodle: ['noodle', 'style:noodle', 'ramen', 'udon', 'soba', 'yakisoba', 'compat:noodle:high'],
   pasta: ['pasta', 'style:pasta', 'western'],
   japanese: ['japanese', 'genre:japanese', 'style:setMeal'],
@@ -503,6 +503,14 @@ function matchesMealTiming(recipe: Recipe, template: MealTemplate) {
   return recipe.mealTiming.some((timing) => template.mealTiming.includes(timing));
 }
 
+function isLowFatHamburgRecipe(recipe: Recipe) {
+  const tags = recipe.tags;
+  return (
+    recipe.id.includes('hamburg') &&
+    (tags.includes('tofu') || tags.includes('chicken') || tags.includes('low-fat') || tags.includes('trait:lowFat'))
+  );
+}
+
 function findRiceIngredient(items: MealItem[]) {
   for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
     const ingredientIndex = items[itemIndex].ingredients.findIndex((ingredient) => ingredient.food.id === 'white-rice');
@@ -522,8 +530,8 @@ function scoreRecipe(
 ) {
   const selectedTags = expandTags(input.tags);
   const directSelected = input.tags.flatMap((tag) => tagAliases[tag] ?? [tag]);
-  const tagScore = selectedTags.filter((tag) => recipe.tags.includes(tag)).length * 72;
-  const directTagScore = directSelected.filter((tag) => recipe.tags.includes(tag)).length * 90;
+  const tagScore = selectedTags.filter((tag) => recipe.tags.includes(tag)).length * 92;
+  const directTagScore = directSelected.filter((tag) => recipe.tags.includes(tag)).length * 118;
   const preferScore = preferTags.filter((tag) => recipe.tags.includes(tag)).length * 26;
   const avoidPenalty = avoidTags.filter((tag) => recipe.tags.includes(tag)).length * 50;
   const intentScore = scoreRecipeIntent(recipe, foodMap, intent);
@@ -536,12 +544,13 @@ function scoreRecipe(
     },
     intent,
   );
-  const lowFatBonus = input.tags.includes('low-fat') && recipe.tags.includes('low-fat') ? 80 : 0;
-  const proteinBonus = input.tags.includes('high-protein') && recipe.tags.includes('high-protein') ? 80 : 0;
+  const lowFatBonus = input.tags.includes('low-fat') && recipe.tags.includes('low-fat') ? 110 : 0;
+  const proteinBonus = input.tags.includes('high-protein') && recipe.tags.includes('high-protein') ? 110 : 0;
+  const lowFatHamburgBonus = input.tags.includes('low-fat') && isLowFatHamburgRecipe(recipe) ? 80 : 0;
   const userFoodBonus = recipe.id.startsWith('generated-recipe-') ? 140 : 0;
   const timingBonus = matchesMealTiming(recipe, template) ? 18 : 0;
   const timeBonus = Math.max(0, 18 - recipe.cookingTime);
-  return tagScore + directTagScore + preferScore + intentScore + keywordIntentScore + lowFatBonus + proteinBonus + userFoodBonus + timingBonus + timeBonus - avoidPenalty;
+  return tagScore + directTagScore + preferScore + intentScore + keywordIntentScore + lowFatBonus + proteinBonus + lowFatHamburgBonus + userFoodBonus + timingBonus + timeBonus - avoidPenalty;
 }
 
 function scoreMeal(
@@ -553,12 +562,12 @@ function scoreMeal(
   intent: FreeTextIntent,
   fitScore: number,
 ) {
-  const kcalScore = macroScore(diff, input, 'kcal', 220, 0.5);
-  const pScore = macroScore(diff, input, 'protein', 120, 4);
-  const fScore = macroScore(diff, input, 'fat', 95, 5.2);
-  const cScore = macroScore(diff, input, 'carb', 95, 2);
+  const kcalScore = macroScore(diff, input, 'kcal', 180, 0.45);
+  const pScore = macroScore(diff, input, 'protein', 100, 3.6);
+  const fScore = macroScore(diff, input, 'fat', 82, 4.8);
+  const cScore = macroScore(diff, input, 'carb', 78, 1.8);
   const selectedTags = expandTags(input.tags);
-  const tagScore = items.flatMap((item) => item.recipe.tags).filter((tag) => selectedTags.includes(tag)).length * 42;
+  const tagScore = items.flatMap((item) => item.recipe.tags).filter((tag) => selectedTags.includes(tag)).length * 70;
   const lowFatScore = input.tags.includes('low-fat') ? Math.max(0, 180 - totals.fat * 7) : 0;
   const highProteinScore = input.tags.includes('high-protein') ? totals.protein * 3.2 : 0;
   const userFoodScore = items.some((item) => item.recipe.id.startsWith('generated-recipe-')) ? 260 : 0;
@@ -574,6 +583,7 @@ function scoreMeal(
   const keywordIntentScore = scoreKeywordIntent(mealKeywordIntentContext(items), intent);
   const naturalnessPenalty = mealNaturalnessPenalty(items);
   const mealStructureScore = scoreMealStructure(items, input);
+  const mealTimingScore = scoreMealTimingPreference(items, input, template);
 
   return round1(
     kcalScore +
@@ -589,7 +599,8 @@ function scoreMeal(
       intentScore +
       keywordIntentScore -
       naturalnessPenalty +
-      mealStructureScore,
+      mealStructureScore +
+      mealTimingScore,
   );
 }
 
@@ -600,9 +611,9 @@ function macroScore(diff: MacroDiffProfile, input: MealInput, key: MacroKey, max
 
 function getIntentWeight(fitScore: number) {
   if (fitScore < MIN_RECOMMENDED_FIT_SCORE) return 0;
-  if (fitScore < 55) return 0.18;
-  if (fitScore < 75) return 0.3;
-  return 0.42;
+  if (fitScore < 55) return 0.55;
+  if (fitScore < 75) return 0.85;
+  return 1.08;
 }
 
 const freeTextIntentRules: Array<{
@@ -802,8 +813,8 @@ const expandedFreeTextIntentRules: typeof freeTextIntentRules = [
   {
     mood: 'western',
     keywords: ['洋食', 'イタリアン'],
-    tags: ['western', 'pasta'],
-    includeTerms: ['洋食', 'イタリアン', 'パスタ', 'ペペロンチーノ', 'ナポリタン', 'グラタン', 'ハンバーグ'],
+    tags: ['western', 'genre:western', 'hamburg', 'steak'],
+    includeTerms: ['洋食', 'イタリアン', 'パスタ', 'ペペロンチーノ', 'ナポリタン', 'グラタン', 'ハンバーグ', 'チキンステーキ', 'ピカタ', 'ポトフ', 'カチャトーラ'],
     penaltyTerms: ['納豆ご飯', '味噌汁'],
   },
   {
@@ -993,7 +1004,7 @@ const userFacingFreeTextIntentRules: typeof freeTextIntentRules = [
     mood: 'western',
     keywords: ['洋食'],
     tags: ['western', 'genre:western'],
-    includeTerms: ['ハンバーグ', 'オムライス', 'ホットサンド', 'トースト', 'ピカタ'],
+    includeTerms: ['ハンバーグ', 'オムライス', 'チキンステーキ', 'ピカタ', 'ポトフ', 'カチャトーラ', '煮込みハンバーグ'],
     penaltyTerms: ['おでん', '味噌汁', '納豆ご飯'],
   },
   {
@@ -1174,8 +1185,8 @@ const keywordIntentProfiles: Array<{
     positiveTerms: ['エスニック', 'ガパオ', 'ラープ', 'フムス', 'ムサカ', 'クスクス', 'シャクシュカ', 'ナンプラー'],
     negativeTags: ['japanese'],
     negativeTerms: ['納豆ご飯', '味噌汁', 'おでん'],
-    baseScore: 820,
-    penaltyScore: 540,
+    baseScore: 1280,
+    penaltyScore: 420,
   },
   {
     moods: ['japanese'],
@@ -1188,12 +1199,12 @@ const keywordIntentProfiles: Array<{
   },
   {
     moods: ['western'],
-    positiveTags: ['western', 'genre:western', 'bread', 'style:bread'],
-    positiveTerms: ['洋食', 'ハンバーグ', 'オムライス', 'ホットサンド', 'トースト'],
+    positiveTags: ['western', 'genre:western', 'hamburg', 'steak', 'satisfying'],
+    positiveTerms: ['洋食', 'ハンバーグ', 'オムライス', 'チキンステーキ', 'ピカタ', 'ポトフ', 'カチャトーラ'],
     negativeTags: ['hotpot', 'japanese'],
     negativeTerms: ['おでん', '味噌汁', '納豆ご飯'],
-    baseScore: 520,
-    penaltyScore: 360,
+    baseScore: 690,
+    penaltyScore: 300,
   },
   {
     moods: ['yakitori'],
@@ -1845,6 +1856,65 @@ function scoreMealStructure(items: MealItem[], input?: MealInput) {
   }
 
   return Math.max(-220, Math.min(90, score));
+}
+
+function scoreMealTimingPreference(items: MealItem[], input: MealInput, template: MealTemplate) {
+  const requestedTiming = input.tags.filter((tag): tag is Recipe['mealTiming'][number] =>
+    tag === 'breakfast' || tag === 'lunch' || tag === 'dinner' || tag === 'snack',
+  );
+  const timings = requestedTiming.length > 0 ? requestedTiming : template.mealTiming;
+  const tags = items.flatMap((item) => item.recipe.tags);
+  const ids = items.map((item) => item.recipe.id);
+  const hasTag = (candidates: string[]) => candidates.some((tag) => tags.includes(tag));
+  const hasId = (candidates: string[]) => candidates.some((term) => ids.some((id) => id.includes(term)));
+
+  const hasBread = hasTag(['bread', 'style:bread']) || hasId(['toast', 'sand', 'bread']);
+  const hasToastOrSandwich = hasId(['toast', 'sand']) || hasTag(['style:bread']);
+  const hasBowl = hasTag(['style:bowl', 'rice-bowl']) || hasId(['don', 'rice', 'bowl', 'gapao', 'loco-moco']);
+  const hasNoodle = hasTag(['style:noodle', 'style:pasta', 'style:yakisoba', 'noodle', 'pasta', 'yakisoba']) || hasId(['ramen', 'udon', 'soba', 'pasta', 'yakisoba']);
+  const hasHotpot = hasTag(['hotpot', 'style:hotPot', 'structure:flexible']) || hasId(['hotpot', 'oden', 'nabe', 'shabu']);
+  const hasHamburg = hasTag(['hamburg']) || hasId(['hamburg', 'loco-moco']);
+  const hasChickenSteak = hasTag(['steak']) || hasId(['chicken-steak']);
+  const hasFishSet = hasTag(['fish']) && hasTag(['genre:japanese', 'japanese']);
+  const hasEggOrNatto = hasTag(['egg', 'natto']) || hasId(['egg', 'natto']);
+  const hasMisoSoup = hasTag(['soup', 'genre:japanese']) && hasId(['miso-soup']);
+  const hasEthnicLunch = hasTag(['ethnic', 'genre:ethnic']) || hasId(['gapao', 'larb', 'couscous']);
+  const hasYakitori = hasTag(['izakaya', 'genre:izakaya']) || hasId(['yakitori', 'negima']);
+
+  let score = 0;
+
+  if (timings.includes('breakfast')) {
+    if (hasBread) score += 24;
+    if (hasToastOrSandwich) score += 24;
+    if (hasEggOrNatto) score += 14;
+    if (hasMisoSoup) score += 10;
+    if (hasHotpot) score -= 24;
+    if (hasHamburg) score -= 22;
+  }
+
+  if (timings.includes('lunch')) {
+    if (hasBowl) score += 24;
+    if (hasNoodle) score += 22;
+    if (hasBread) score += 16;
+    if (hasEthnicLunch) score += 28;
+    if (hasYakitori) score += 18;
+  }
+
+  if (timings.includes('dinner')) {
+    if (hasHamburg) score += 28;
+    if (hasChickenSteak) score += 28;
+    if (hasHotpot) score += 30;
+    if (hasFishSet) score += 22;
+    if (hasBread) score -= 18;
+    if (hasToastOrSandwich) score -= 28;
+  }
+
+  if (timings.includes('snack')) {
+    if (hasBread) score += 10;
+    if (hasHotpot || hasHamburg) score -= 24;
+  }
+
+  return Math.max(-90, Math.min(120, score));
 }
 
 function isSupplementalIngredient(ingredient: MealIngredient) {
