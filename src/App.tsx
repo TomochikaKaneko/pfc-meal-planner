@@ -1502,7 +1502,7 @@ function mealPlanModeHeading(mode: MealPlanMode) {
 function mealPlanModeDescription(mode: MealPlanMode) {
   return mode === 'daily'
     ? '1日で摂りたい kcal / P / F / C を入力してください。'
-    : '今日の残りや、この1食で摂りたい kcal / P / F / C を入力してください。';
+    : 'この1食で摂りたい kcal / P / F / C を入力してください。';
 }
 
 function categoryLabel(category: FoodCategory) {
