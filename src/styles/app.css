@@ -48,18 +48,18 @@ button {
   padding: max(16px, env(safe-area-inset-top)) 18px calc(92px + env(safe-area-inset-bottom));
 }
 
-.app-shell.daily-mode {
+.app-shell.multi-mode {
   background: linear-gradient(180deg, #fffaf2 0%, #fbf0df 54%, #f5e7d3 100%);
 }
 
-.app-shell.daily-mode .hero-panel,
-.app-shell.daily-mode .header-icon-button,
-.app-shell.daily-mode .primary-action,
-.app-shell.daily-mode .nav-button.active {
+.app-shell.multi-mode .hero-panel,
+.app-shell.multi-mode .header-icon-button,
+.app-shell.multi-mode .primary-action,
+.app-shell.multi-mode .nav-button.active {
   background: #c7763d;
 }
 
-.app-shell.daily-mode .app-mark {
+.app-shell.multi-mode .app-mark {
   background: #c7763d;
   box-shadow: 0 12px 28px rgba(164, 91, 43, 0.2);
 }
@@ -326,9 +326,18 @@ button {
   line-height: 1.2;
 }
 
-.meal-plan-mode-switch {
+.meal-plan-mode-control {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.meal-plan-mode-control.compact {
+  margin-bottom: 10px;
+}
+
+.meal-plan-mode-switch,
+.multi-period-switch {
+  display: grid;
   gap: 6px;
   padding: 5px;
   border: 1px solid rgba(47, 125, 104, 0.14);
@@ -337,12 +346,22 @@ button {
   box-shadow: 0 10px 22px rgba(40, 79, 65, 0.06);
 }
 
-.meal-plan-mode-switch.compact {
-  margin-bottom: 10px;
+.meal-plan-mode-switch {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.multi-period-switch {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   box-shadow: none;
 }
 
-.meal-plan-mode-switch button {
+.meal-plan-mode-control.compact .meal-plan-mode-switch,
+.meal-plan-mode-control.compact .multi-period-switch {
+  box-shadow: none;
+}
+
+.meal-plan-mode-switch button,
+.multi-period-switch button {
   min-height: 34px;
   border: 1px solid rgba(47, 125, 104, 0.18);
   border-radius: 8px;
@@ -352,25 +371,34 @@ button {
   font-weight: 900;
 }
 
-.meal-plan-mode-switch button.selected {
+.multi-period-switch button {
+  min-height: 30px;
+  font-size: 0.8rem;
+}
+
+.meal-plan-mode-switch button.selected,
+.multi-period-switch button.selected {
   color: #ffffff;
   border-color: rgba(47, 125, 104, 0.35);
   background: #2f7d68;
   box-shadow: 0 8px 18px rgba(47, 125, 104, 0.16);
 }
 
-.daily-mode .meal-plan-mode-switch {
+.multi-mode .meal-plan-mode-switch,
+.multi-mode .multi-period-switch {
   border-color: rgba(199, 118, 61, 0.18);
   background: rgba(255, 250, 242, 0.82);
 }
 
-.daily-mode .meal-plan-mode-switch button {
+.multi-mode .meal-plan-mode-switch button,
+.multi-mode .multi-period-switch button {
   color: #8a5a35;
   border-color: rgba(199, 118, 61, 0.22);
   background: #fff8ef;
 }
 
-.daily-mode .meal-plan-mode-switch button.selected {
+.multi-mode .meal-plan-mode-switch button.selected,
+.multi-mode .multi-period-switch button.selected {
   color: #ffffff;
   border-color: rgba(199, 118, 61, 0.4);
   background: #c7763d;

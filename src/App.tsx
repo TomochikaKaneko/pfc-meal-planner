@@ -123,7 +123,8 @@ const emptyFoodForm = {
 };
 
 type Tab = 'home' | 'results' | 'foods' | 'shopping' | 'guide';
-type MealPlanMode = 'single' | 'daily';
+type MealPlanMode = 'single' | 'multi';
+type MultiMealPeriod = 'day' | 'threeDays' | 'week';
 
 interface ShoppingListItem {
   name: string;
@@ -134,6 +135,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('home');
   const [mealInput, setMealInput] = useState<MealInput>(() => loadMealInput());
   const [mealPlanMode, setMealPlanMode] = useState<MealPlanMode>('single');
+  const [multiMealPeriod, setMultiMealPeriod] = useState<MultiMealPeriod>('day');
   const [freeCondition, setFreeCondition] = useState(() => loadFreeCondition());
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
   const [excludedFoodIds, setExcludedFoodIds] = useState<string[]>(() => loadExcludedFoodIds());
@@ -149,6 +151,7 @@ export function App() {
   const [isReplanModalOpen, setIsReplanModalOpen] = useState(false);
   const [draftMealInput, setDraftMealInput] = useState<MealInput>(() => loadMealInput());
   const [draftMealPlanMode, setDraftMealPlanMode] = useState<MealPlanMode>('single');
+  const [draftMultiMealPeriod, setDraftMultiMealPeriod] = useState<MultiMealPeriod>('day');
   const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadFreeCondition());
   const [savedReplanMealInput, setSavedReplanMealInput] = useState<MealInput | null>(null);
   const [savedReplanFreeCondition, setSavedReplanFreeCondition] = useState<string | null>(null);
@@ -268,6 +271,7 @@ export function App() {
   function openReplanModal() {
     setDraftMealInput(savedReplanMealInput ?? mealInput);
     setDraftMealPlanMode(mealPlanMode);
+    setDraftMultiMealPeriod(multiMealPeriod);
     setDraftFreeCondition(savedReplanFreeCondition ?? freeCondition);
     setIsReplanModalOpen(true);
   }
@@ -292,6 +296,7 @@ export function App() {
     const nextFreeCondition = draftFreeCondition;
     setMealInput(nextInput);
     setMealPlanMode(draftMealPlanMode);
+    setMultiMealPeriod(draftMultiMealPeriod);
     setFreeCondition(nextFreeCondition);
     setSavedReplanMealInput(nextInput);
     setSavedReplanFreeCondition(nextFreeCondition);
@@ -386,7 +391,7 @@ export function App() {
   }
 
   return (
-    <div className={mealPlanMode === 'daily' ? 'app-shell daily-mode' : 'app-shell single-mode'}>
+    <div className={mealPlanMode === 'multi' ? 'app-shell multi-mode' : 'app-shell single-mode'}>
       <header className="app-header">
         <div>
           <p className="eyebrow">PWA meal assistant</p>
@@ -429,7 +434,12 @@ export function App() {
               <Sparkles size={26} />
             </div>
 
-            <MealPlanModeSwitch value={mealPlanMode} onChange={setMealPlanMode} />
+            <MealPlanModeSwitch
+              value={mealPlanMode}
+              period={multiMealPeriod}
+              onChange={setMealPlanMode}
+              onPeriodChange={setMultiMealPeriod}
+            />
 
             {!isStandalone && (
               <section className="install-tip">
@@ -441,8 +451,8 @@ export function App() {
 
             <section className="panel">
               <div className="section-title vertical">
-                <h2>{mealPlanModeHeading(mealPlanMode)}</h2>
-                <p>{mealPlanModeDescription(mealPlanMode)}</p>
+                <h2>{mealPlanModeHeading(mealPlanMode, multiMealPeriod)}</h2>
+                <p>{mealPlanModeDescription(mealPlanMode, multiMealPeriod)}</p>
               </div>
               <div className="macro-grid with-heading">
                 {macroFields.map((field) => (
@@ -740,9 +750,11 @@ export function App() {
       {isReplanModalOpen && (
         <ReplanConditionModal
           mealPlanMode={draftMealPlanMode}
+          multiMealPeriod={draftMultiMealPeriod}
           mealInput={draftMealInput}
           freeCondition={draftFreeCondition}
           onMealPlanModeChange={setDraftMealPlanMode}
+          onMultiMealPeriodChange={setDraftMultiMealPeriod}
           onMacroChange={updateDraftInput}
           onMacroModeChange={updateDraftInputMode}
           onToggleTag={toggleDraftTag}
@@ -838,21 +850,41 @@ function MacroInput({
 
 function MealPlanModeSwitch({
   value,
+  period,
   onChange,
+  onPeriodChange,
   compact = false,
 }: {
   value: MealPlanMode;
+  period: MultiMealPeriod;
   onChange: (mode: MealPlanMode) => void;
+  onPeriodChange: (period: MultiMealPeriod) => void;
   compact?: boolean;
 }) {
   return (
-    <div className={compact ? 'meal-plan-mode-switch compact' : 'meal-plan-mode-switch'} aria-label="献立モード">
-      <button className={value === 'single' ? 'selected' : ''} type="button" onClick={() => onChange('single')}>
-        1食献立
-      </button>
-      <button className={value === 'daily' ? 'selected' : ''} type="button" onClick={() => onChange('daily')}>
-        1日献立
-      </button>
+    <div className={compact ? 'meal-plan-mode-control compact' : 'meal-plan-mode-control'}>
+      <div className="meal-plan-mode-switch" aria-label="献立モード">
+        <button className={value === 'single' ? 'selected' : ''} type="button" onClick={() => onChange('single')}>
+          1食献立
+        </button>
+        <button className={value === 'multi' ? 'selected' : ''} type="button" onClick={() => onChange('multi')}>
+          複数食献立
+        </button>
+      </div>
+      {value === 'multi' && (
+        <div className="multi-period-switch" aria-label="複数食の期間">
+          {multiMealPeriodOptions.map((option) => (
+            <button
+              key={option.value}
+              className={period === option.value ? 'selected' : ''}
+              type="button"
+              onClick={() => onPeriodChange(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1030,9 +1062,11 @@ function TagSelectorModal({
 
 function ReplanConditionModal({
   mealPlanMode,
+  multiMealPeriod,
   mealInput,
   freeCondition,
   onMealPlanModeChange,
+  onMultiMealPeriodChange,
   onMacroChange,
   onMacroModeChange,
   onToggleTag,
@@ -1043,9 +1077,11 @@ function ReplanConditionModal({
   onBlurNumber,
 }: {
   mealPlanMode: MealPlanMode;
+  multiMealPeriod: MultiMealPeriod;
   mealInput: MealInput;
   freeCondition: string;
   onMealPlanModeChange: (mode: MealPlanMode) => void;
+  onMultiMealPeriodChange: (period: MultiMealPeriod) => void;
   onMacroChange: (key: MacroKey, value: string) => void;
   onMacroModeChange: (key: MacroKey, mode: MacroTargetMode) => void;
   onToggleTag: (tag: ConditionTag) => void;
@@ -1066,9 +1102,11 @@ function ReplanConditionModal({
           <MealConditionEditor
             compact
             mealPlanMode={mealPlanMode}
+            multiMealPeriod={multiMealPeriod}
             mealInput={mealInput}
             freeCondition={freeCondition}
             onMealPlanModeChange={onMealPlanModeChange}
+            onMultiMealPeriodChange={onMultiMealPeriodChange}
             onMacroChange={onMacroChange}
             onMacroModeChange={onMacroModeChange}
             onToggleTag={onToggleTag}
@@ -1093,9 +1131,11 @@ function ReplanConditionModal({
 function MealConditionEditor({
   compact = false,
   mealPlanMode,
+  multiMealPeriod,
   mealInput,
   freeCondition,
   onMealPlanModeChange,
+  onMultiMealPeriodChange,
   onMacroChange,
   onMacroModeChange,
   onToggleTag,
@@ -1105,9 +1145,11 @@ function MealConditionEditor({
 }: {
   compact?: boolean;
   mealPlanMode: MealPlanMode;
+  multiMealPeriod: MultiMealPeriod;
   mealInput: MealInput;
   freeCondition: string;
   onMealPlanModeChange: (mode: MealPlanMode) => void;
+  onMultiMealPeriodChange: (period: MultiMealPeriod) => void;
   onMacroChange: (key: MacroKey, value: string) => void;
   onMacroModeChange: (key: MacroKey, mode: MacroTargetMode) => void;
   onToggleTag: (tag: ConditionTag) => void;
@@ -1117,10 +1159,16 @@ function MealConditionEditor({
 }) {
   return (
     <section className={compact ? 'panel condition-editor compact-editor' : 'panel condition-editor'}>
-      <MealPlanModeSwitch value={mealPlanMode} onChange={onMealPlanModeChange} compact />
+      <MealPlanModeSwitch
+        value={mealPlanMode}
+        period={multiMealPeriod}
+        onChange={onMealPlanModeChange}
+        onPeriodChange={onMultiMealPeriodChange}
+        compact
+      />
       <div className="section-title vertical">
-        <h2>{compact ? '条件を編集' : mealPlanModeHeading(mealPlanMode)}</h2>
-        <p>{mealPlanModeDescription(mealPlanMode)}</p>
+        <h2>{compact ? '条件を編集' : mealPlanModeHeading(mealPlanMode, multiMealPeriod)}</h2>
+        <p>{mealPlanModeDescription(mealPlanMode, multiMealPeriod)}</p>
       </div>
       <div className="macro-grid with-heading">
         {macroFields.map((field) => (
@@ -1495,14 +1543,35 @@ const macroModeOptions: { value: MacroTargetMode; label: string }[] = [
   { value: 'maximum', label: '以下' },
 ];
 
-function mealPlanModeHeading(mode: MealPlanMode) {
-  return mode === 'daily' ? '1日で摂りたい目安' : 'この食事で摂りたい目安';
+const multiMealPeriodOptions: { value: MultiMealPeriod; label: string; heading: string; description: string }[] = [
+  {
+    value: 'day',
+    label: '1日',
+    heading: '1日で摂りたい目安',
+    description: '1日で摂りたい kcal / P / F / C を入力してください。',
+  },
+  {
+    value: 'threeDays',
+    label: '3日',
+    heading: '3日間で摂りたい目安',
+    description: '3日間で摂りたい kcal / P / F / C を入力してください。',
+  },
+  {
+    value: 'week',
+    label: '1週間',
+    heading: '1週間で摂りたい目安',
+    description: '1週間で摂りたい kcal / P / F / C を入力してください。',
+  },
+];
+
+function mealPlanModeHeading(mode: MealPlanMode, period: MultiMealPeriod) {
+  if (mode === 'single') return 'この食事で摂りたい目安';
+  return multiMealPeriodOptions.find((option) => option.value === period)?.heading ?? multiMealPeriodOptions[0].heading;
 }
 
-function mealPlanModeDescription(mode: MealPlanMode) {
-  return mode === 'daily'
-    ? '1日で摂りたい kcal / P / F / C を入力してください。'
-    : 'この1食で摂りたい kcal / P / F / C を入力してください。';
+function mealPlanModeDescription(mode: MealPlanMode, period: MultiMealPeriod) {
+  if (mode === 'single') return '今日の残りや、この1食で摂りたい kcal / P / F / C を入力してください。';
+  return multiMealPeriodOptions.find((option) => option.value === period)?.description ?? multiMealPeriodOptions[0].description;
 }
 
 function categoryLabel(category: FoodCategory) {
