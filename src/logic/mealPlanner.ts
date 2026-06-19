@@ -1115,11 +1115,11 @@ function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTe
       (tags.includes('satisfying') ? 120 : 0)
     : 0;
   const pastaGate = intent.moods.includes('pasta') && !tags.includes('pasta') ? -900 : 0;
-  const breadGate = intent.moods.includes('bread') && !tags.includes('bread') && !tags.includes('style:bread') ? -720 : 0;
+  const breadGate = intent.moods.includes('bread') && !tags.includes('bread') && !tags.includes('style:bread') ? -920 : 0;
   const yakisobaGate = intent.moods.includes('yakisoba') && !tags.includes('yakisoba') ? -900 : 0;
   const koreanGate = intent.moods.includes('korean') && !tags.includes('korean') && !tags.includes('kimchi') ? -620 : 0;
   const chineseGate = intent.moods.includes('chinese') && !tags.includes('chinese') ? -620 : 0;
-  const ethnicGate = intent.moods.includes('ethnic') && !tags.includes('ethnic') && !tags.includes('genre:ethnic') ? -620 : 0;
+  const ethnicGate = intent.moods.includes('ethnic') && !tags.includes('ethnic') && !tags.includes('genre:ethnic') ? -1120 : 0;
   const meatGate = intent.moods.includes('meat') && !tags.some((tag) => ['chicken', 'pork', 'beef'].includes(tag)) ? -780 : 0;
   const meatBonus = intent.moods.includes('meat') && tags.some((tag) => ['chicken', 'pork', 'beef'].includes(tag)) ? 180 : 0;
   const lightBonus = intent.moods.includes('light') ? Math.max(0, 120 - totals.fat * 5) : 0;
@@ -1158,8 +1158,8 @@ const keywordIntentProfiles: Array<{
     positiveTerms: ['パン', 'トースト', 'サンド', 'ホットサンド', 'ピザトースト', '食パン'],
     negativeTags: ['hotpot', 'structure:flexible', 'yakisoba', 'style:bowl'],
     negativeTerms: ['鍋', 'おでん', '焼きそば', '丼'],
-    baseScore: 820,
-    penaltyScore: 620,
+    baseScore: 980,
+    penaltyScore: 760,
   },
   {
     moods: ['noodle'],
@@ -1183,10 +1183,10 @@ const keywordIntentProfiles: Array<{
     moods: ['ethnic'],
     positiveTags: ['ethnic', 'genre:ethnic', 'thai', 'discover:discovery'],
     positiveTerms: ['エスニック', 'ガパオ', 'ラープ', 'フムス', 'ムサカ', 'クスクス', 'シャクシュカ', 'ナンプラー'],
-    negativeTags: ['japanese'],
+    negativeTags: ['japanese', 'genre:japanese', 'genre:western'],
     negativeTerms: ['納豆ご飯', '味噌汁', 'おでん'],
-    baseScore: 1280,
-    penaltyScore: 420,
+    baseScore: 1680,
+    penaltyScore: 760,
   },
   {
     moods: ['japanese'],
@@ -1455,6 +1455,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
       rank: (candidate) =>
         candidateKeywordIntentRank(candidate, intent) * 1.25 +
         candidateGenreConsistencyRank(candidate, intent) +
+        candidateThemeConsistencyRank(candidate, input, intent) +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) -
@@ -1466,6 +1467,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
       rank: (candidate) =>
         candidateKeywordIntentRank(candidate, intent) * 1.25 +
         candidateGenreConsistencyRank(candidate, intent) +
+        candidateThemeConsistencyRank(candidate, input, intent) +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) +
@@ -1479,6 +1481,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
       rank: (candidate) =>
         candidateKeywordIntentRank(candidate, intent) * 1.25 +
         candidateGenreConsistencyRank(candidate, intent) +
+        candidateThemeConsistencyRank(candidate, input, intent) +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) +
@@ -1705,10 +1708,48 @@ function candidateGenreConsistencyRank(candidate: MealCandidate, intent: FreeTex
   return active.reduce((score, mood) => {
     const primaryMatch = hasGenre(mood, primaryTags);
     const mealMatch = hasGenre(mood, tags);
-    if (primaryMatch) return score + 780;
-    if (mealMatch) return score + 420;
-    return score - 760;
+    const primaryBonus = mood === 'ethnic' ? 1260 : 900;
+    const mealBonus = mood === 'ethnic' ? 720 : 500;
+    const mismatchPenalty = mood === 'ethnic' ? 1180 : 860;
+    if (primaryMatch) return score + primaryBonus;
+    if (mealMatch) return score + mealBonus;
+    return score - mismatchPenalty;
   }, 0);
+}
+
+function candidateThemeConsistencyRank(candidate: MealCandidate, input: MealInput, intent: FreeTextIntent) {
+  const requestedBreakfast = input.tags.includes('breakfast') || intent.moods.includes('breakfast');
+  const requestedBread = input.tags.includes('bread') || intent.moods.includes('bread');
+  if (!requestedBreakfast || !requestedBread) return 0;
+
+  const primary = getPrimaryDishItem(candidate);
+  const primaryTags = primary?.recipe.tags ?? [];
+  const allTags = candidate.items.flatMap((item) => item.recipe.tags);
+  const primaryName = normalizeIntentText(primary?.recipe.name ?? '');
+  const isPrimaryBread = primaryTags.some((tag) => ['bread', 'style:bread'].includes(tag));
+  const isToastOrSandwich =
+    primaryTags.some((tag) => ['style:toast', 'style:sandwich'].includes(tag)) ||
+    ['トースト', 'サンド', 'ホットサンド'].some((term) => primaryName.includes(normalizeIntentText(term)));
+  const isPlainBread =
+    primary?.recipe.id === 'french-bread-side' ||
+    primary?.recipe.id === 'roll-bread-side' ||
+    ['フランスパン', 'ロールパン'].some((term) => primaryName.includes(normalizeIntentText(term)));
+  const hasNonBreadProtagonist =
+    primary !== undefined &&
+    !isPrimaryBread &&
+    (isOneDishRecipe(primary.recipe) || primary.recipe.tags.includes('role:protagonist') || primary.recipe.category === 'main');
+  const hasBreakfastTag = primaryTags.includes('scene:breakfast') || primaryTags.includes('breakfast');
+
+  let score = 0;
+  if (isToastOrSandwich) score += 980;
+  if (isPrimaryBread) score += 420;
+  if (hasBreakfastTag) score += 220;
+  if (isPlainBread) score -= 520;
+  if (!isPrimaryBread) score -= 820;
+  if (hasNonBreadProtagonist) score -= 520;
+  if (allTags.includes('genre:ethnic') || allTags.includes('ethnic')) score -= 260;
+
+  return score;
 }
 
 function hasSimilarRecipeName(a: MealCandidate, b: MealCandidate) {
@@ -1907,7 +1948,9 @@ function scoreMealTimingPreference(items: MealItem[], input: MealInput, template
   const hasId = (candidates: string[]) => candidates.some((term) => ids.some((id) => id.includes(term)));
 
   const hasBread = hasTag(['bread', 'style:bread']) || hasId(['toast', 'sand', 'bread']);
-  const hasToastOrSandwich = hasId(['toast', 'sand']) || hasTag(['style:bread']);
+  const hasToastOrSandwich = hasTag(['style:toast', 'style:sandwich']) || hasId(['toast', 'sand']);
+  const hasBreakfastBread = hasToastOrSandwich;
+  const hasPlainBreadOnly = hasId(['french-bread-side', 'roll-bread-side']) && !hasBreakfastBread;
   const hasBowl = hasTag(['style:bowl', 'rice-bowl']) || hasId(['don', 'rice', 'bowl', 'gapao', 'loco-moco']);
   const hasNoodle = hasTag(['style:noodle', 'style:pasta', 'style:yakisoba', 'noodle', 'pasta', 'yakisoba']) || hasId(['ramen', 'udon', 'soba', 'pasta', 'yakisoba']);
   const hasHotpot = hasTag(['hotpot', 'style:hotPot', 'structure:flexible']) || hasId(['hotpot', 'oden', 'nabe', 'shabu']);
@@ -1924,6 +1967,8 @@ function scoreMealTimingPreference(items: MealItem[], input: MealInput, template
   if (timings.includes('breakfast')) {
     if (hasBread) score += 24;
     if (hasToastOrSandwich) score += 24;
+    if (hasBreakfastBread) score += 36;
+    if (hasPlainBreadOnly) score -= 32;
     if (hasEggOrNatto) score += 14;
     if (hasMisoSoup) score += 10;
     if (hasHotpot) score -= 24;
