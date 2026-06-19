@@ -1543,35 +1543,29 @@ const macroModeOptions: { value: MacroTargetMode; label: string }[] = [
   { value: 'maximum', label: '以下' },
 ];
 
-const multiMealPeriodOptions: { value: MultiMealPeriod; label: string; heading: string; description: string }[] = [
+const multiMealPeriodOptions: { value: MultiMealPeriod; label: string }[] = [
   {
     value: 'day',
     label: '1日',
-    heading: '1日で摂りたい目安',
-    description: '1日で摂りたい kcal / P / F / C を入力してください。',
   },
   {
     value: 'threeDays',
     label: '3日',
-    heading: '3日間で摂りたい目安',
-    description: '3日間で摂りたい kcal / P / F / C を入力してください。',
   },
   {
     value: 'week',
     label: '1週間',
-    heading: '1週間で摂りたい目安',
-    description: '1週間で摂りたい kcal / P / F / C を入力してください。',
   },
 ];
 
-function mealPlanModeHeading(mode: MealPlanMode, period: MultiMealPeriod) {
+function mealPlanModeHeading(mode: MealPlanMode, _period: MultiMealPeriod) {
   if (mode === 'single') return 'この食事で摂りたい目安';
-  return multiMealPeriodOptions.find((option) => option.value === period)?.heading ?? multiMealPeriodOptions[0].heading;
+  return '1日あたりの摂取目安';
 }
 
-function mealPlanModeDescription(mode: MealPlanMode, period: MultiMealPeriod) {
+function mealPlanModeDescription(mode: MealPlanMode, _period: MultiMealPeriod) {
   if (mode === 'single') return '今日の残りや、この1食で摂りたい kcal / P / F / C を入力してください。';
-  return multiMealPeriodOptions.find((option) => option.value === period)?.description ?? multiMealPeriodOptions[0].description;
+  return '選択した期間に応じて、1日あたりの目安をもとに献立を作成します。';
 }
 
 function categoryLabel(category: FoodCategory) {
