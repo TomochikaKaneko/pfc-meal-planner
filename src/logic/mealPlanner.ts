@@ -527,12 +527,21 @@ function scoreRecipe(
   const preferScore = preferTags.filter((tag) => recipe.tags.includes(tag)).length * 26;
   const avoidPenalty = avoidTags.filter((tag) => recipe.tags.includes(tag)).length * 50;
   const intentScore = scoreRecipeIntent(recipe, foodMap, intent);
+  const keywordIntentScore = scoreKeywordIntent(
+    {
+      tags: recipe.tags,
+      searchText: recipeSearchText(recipe, foodMap),
+      primaryTags: recipe.tags,
+      primarySearchText: recipeSearchText(recipe, foodMap),
+    },
+    intent,
+  );
   const lowFatBonus = input.tags.includes('low-fat') && recipe.tags.includes('low-fat') ? 80 : 0;
   const proteinBonus = input.tags.includes('high-protein') && recipe.tags.includes('high-protein') ? 80 : 0;
   const userFoodBonus = recipe.id.startsWith('generated-recipe-') ? 140 : 0;
   const timingBonus = matchesMealTiming(recipe, template) ? 18 : 0;
   const timeBonus = Math.max(0, 18 - recipe.cookingTime);
-  return tagScore + directTagScore + preferScore + intentScore + lowFatBonus + proteinBonus + userFoodBonus + timingBonus + timeBonus - avoidPenalty;
+  return tagScore + directTagScore + preferScore + intentScore + keywordIntentScore + lowFatBonus + proteinBonus + userFoodBonus + timingBonus + timeBonus - avoidPenalty;
 }
 
 function scoreMeal(
@@ -562,6 +571,7 @@ function scoreMeal(
       : -120;
   const templateScore = items.some((item) => item.recipe.tags.includes(template.id)) ? 12 : 0;
   const intentScore = scoreMealIntent(items, totals, intent) * getIntentWeight(fitScore);
+  const keywordIntentScore = scoreKeywordIntent(mealKeywordIntentContext(items), intent);
   const naturalnessPenalty = mealNaturalnessPenalty(items);
   const mealStructureScore = scoreMealStructure(items, input);
 
@@ -576,7 +586,8 @@ function scoreMeal(
       userFoodScore +
       structureScore +
       templateScore +
-      intentScore -
+      intentScore +
+      keywordIntentScore -
       naturalnessPenalty +
       mealStructureScore,
   );
@@ -951,11 +962,46 @@ const userFacingFreeTextIntentRules: typeof freeTextIntentRules = [
     penaltyTerms: ['白米', '丼', 'ラーメン', 'うどん', 'そば'],
   },
   {
+    mood: 'noodle',
+    keywords: ['麺', 'めん', '麺類'],
+    tags: ['noodle', 'style:noodle', 'pasta', 'yakisoba'],
+    includeTerms: ['麺', 'ラーメン', 'うどん', 'そば', '焼きそば', 'パスタ', '冷やし中華'],
+    penaltyTerms: ['白米', '丼', 'パン', 'トースト'],
+  },
+  {
+    mood: 'rice-bowl',
+    keywords: ['丼', 'どんぶり', '丼もの'],
+    tags: ['rice-bowl', 'bowl', 'style:bowl', 'white-rice', 'rice'],
+    includeTerms: ['丼', '親子丼', '焼き鳥丼', 'ロコモコ', 'ガパオライス', '牛丼', '豚丼'],
+    penaltyTerms: ['鍋', 'パン', 'パスタ', '焼きそば'],
+  },
+  {
     mood: 'hotpot',
     keywords: ['鍋', 'なべ', 'おでん', '寄せ鍋', 'キムチ鍋', '鶏団子鍋', 'ちゃんこ鍋', 'しゃぶしゃぶ'],
     tags: ['structure:flexible', 'style:hotPot', 'soup', 'japanese', 'genre:japanese'],
     includeTerms: ['鍋', 'おでん', '寄せ鍋', 'キムチ鍋', '鶏団子鍋', 'ちゃんこ鍋', 'しゃぶしゃぶ', '湯豆腐'],
     penaltyTerms: ['パスタ', 'パン', 'ヨーグルト', 'オイコス'],
+  },
+  {
+    mood: 'japanese',
+    keywords: ['和食', '和風'],
+    tags: ['japanese', 'genre:japanese'],
+    includeTerms: ['鮭', 'おでん', '湯豆腐', '焼き鳥', '味噌汁', '定食', '白米'],
+    penaltyTerms: ['パスタ', 'オムライス', 'ホットサンド'],
+  },
+  {
+    mood: 'western',
+    keywords: ['洋食'],
+    tags: ['western', 'genre:western'],
+    includeTerms: ['ハンバーグ', 'オムライス', 'ホットサンド', 'トースト', 'ピカタ'],
+    penaltyTerms: ['おでん', '味噌汁', '納豆ご飯'],
+  },
+  {
+    mood: 'yakitori',
+    keywords: ['焼き鳥', 'やきとり', 'ねぎま'],
+    tags: ['chicken', 'japanese', 'izakaya', 'genre:izakaya'],
+    includeTerms: ['焼き鳥', 'ねぎま', '鶏串', '焼き鳥丼'],
+    penaltyTerms: ['魚', 'パスタ', 'ヨーグルト'],
   },
   {
     mood: 'ethnic',
@@ -1070,6 +1116,145 @@ function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTe
   return tagScore + includeScore + heartyBonus + meatBonus + lightBonus - penalty + pastaGate + breadGate + yakisobaGate + koreanGate + chineseGate + ethnicGate + meatGate;
 }
 
+type KeywordIntentContext = {
+  tags: string[];
+  searchText: string;
+  primaryTags?: string[];
+  primarySearchText?: string;
+};
+
+const keywordIntentProfiles: Array<{
+  moods: string[];
+  positiveTags: string[];
+  positiveTerms: string[];
+  negativeTags: string[];
+  negativeTerms: string[];
+  baseScore: number;
+  penaltyScore: number;
+}> = [
+  {
+    moods: ['hotpot'],
+    positiveTags: ['hotpot', 'structure:flexible', 'style:hotPot'],
+    positiveTerms: ['鍋', 'おでん', '寄せ鍋', 'キムチ鍋', '鶏団子鍋', 'ちゃんこ鍋', 'しゃぶしゃぶ', '湯豆腐'],
+    negativeTags: ['yakisoba', 'pasta', 'bread', 'style:bread', 'western'],
+    negativeTerms: ['焼きそば', 'パスタ', 'パン', 'トースト', 'オムライス'],
+    baseScore: 980,
+    penaltyScore: 720,
+  },
+  {
+    moods: ['bread'],
+    positiveTags: ['bread', 'style:bread'],
+    positiveTerms: ['パン', 'トースト', 'サンド', 'ホットサンド', 'ピザトースト', '食パン'],
+    negativeTags: ['hotpot', 'structure:flexible', 'yakisoba', 'style:bowl'],
+    negativeTerms: ['鍋', 'おでん', '焼きそば', '丼'],
+    baseScore: 820,
+    penaltyScore: 620,
+  },
+  {
+    moods: ['noodle'],
+    positiveTags: ['noodle', 'style:noodle', 'pasta', 'yakisoba'],
+    positiveTerms: ['麺', 'ラーメン', 'うどん', 'そば', '焼きそば', 'パスタ', '冷やし中華'],
+    negativeTags: ['bread', 'style:bread', 'style:bowl'],
+    negativeTerms: ['パン', 'トースト', '丼', '白米'],
+    baseScore: 760,
+    penaltyScore: 520,
+  },
+  {
+    moods: ['rice-bowl', 'oyakodon'],
+    positiveTags: ['style:bowl', 'rice-bowl', 'bowl', 'white-rice'],
+    positiveTerms: ['丼', '親子丼', '焼き鳥丼', 'ロコモコ', 'ガパオライス', '牛丼', '豚丼'],
+    negativeTags: ['hotpot', 'structure:flexible', 'bread', 'pasta', 'yakisoba'],
+    negativeTerms: ['鍋', 'おでん', 'パン', 'パスタ', '焼きそば'],
+    baseScore: 760,
+    penaltyScore: 520,
+  },
+  {
+    moods: ['ethnic'],
+    positiveTags: ['ethnic', 'genre:ethnic', 'thai', 'discover:discovery'],
+    positiveTerms: ['エスニック', 'ガパオ', 'ラープ', 'フムス', 'ムサカ', 'クスクス', 'シャクシュカ', 'ナンプラー'],
+    negativeTags: ['japanese'],
+    negativeTerms: ['納豆ご飯', '味噌汁', 'おでん'],
+    baseScore: 820,
+    penaltyScore: 540,
+  },
+  {
+    moods: ['japanese'],
+    positiveTags: ['japanese', 'genre:japanese'],
+    positiveTerms: ['和食', '鮭', 'おでん', '湯豆腐', '焼き鳥', '味噌汁', '定食'],
+    negativeTags: ['western', 'ethnic', 'pasta'],
+    negativeTerms: ['パスタ', 'オムライス', 'ホットサンド'],
+    baseScore: 520,
+    penaltyScore: 360,
+  },
+  {
+    moods: ['western'],
+    positiveTags: ['western', 'genre:western', 'bread', 'style:bread'],
+    positiveTerms: ['洋食', 'ハンバーグ', 'オムライス', 'ホットサンド', 'トースト'],
+    negativeTags: ['hotpot', 'japanese'],
+    negativeTerms: ['おでん', '味噌汁', '納豆ご飯'],
+    baseScore: 520,
+    penaltyScore: 360,
+  },
+  {
+    moods: ['yakitori'],
+    positiveTags: ['izakaya', 'genre:izakaya', 'chicken', 'japanese'],
+    positiveTerms: ['焼き鳥', 'ねぎま', '鶏串', '焼き鳥丼'],
+    negativeTags: ['fish', 'seafood', 'pasta'],
+    negativeTerms: ['魚', 'パスタ', 'ヨーグルト'],
+    baseScore: 740,
+    penaltyScore: 500,
+  },
+];
+
+function scoreKeywordIntent(context: KeywordIntentContext, intent: FreeTextIntent) {
+  if (intent.moods.length === 0) return 0;
+  const tagSet = new Set(context.tags);
+  const primaryTagSet = new Set(context.primaryTags ?? context.tags);
+  const searchText = context.searchText;
+  const primarySearchText = context.primarySearchText ?? context.searchText;
+
+  return keywordIntentProfiles.reduce((score, profile) => {
+    if (!profile.moods.some((mood) => intent.moods.includes(mood))) return score;
+
+    const tagMatches = profile.positiveTags.filter((tag) => tagSet.has(tag)).length;
+    const primaryTagMatches = profile.positiveTags.filter((tag) => primaryTagSet.has(tag)).length;
+    const termMatches = profile.positiveTerms.map(normalizeIntentText).filter((term) => searchText.includes(term)).length;
+    const primaryTermMatches = profile.positiveTerms.map(normalizeIntentText).filter((term) => primarySearchText.includes(term)).length;
+    const negativeTagMatches = profile.negativeTags.filter((tag) => tagSet.has(tag)).length;
+    const negativeTermMatches = profile.negativeTerms.map(normalizeIntentText).filter((term) => searchText.includes(term)).length;
+    const positiveMatches = tagMatches + primaryTagMatches * 1.4 + termMatches + primaryTermMatches * 1.6;
+    const negativeMatches = negativeTagMatches + negativeTermMatches;
+
+    if (positiveMatches > 0) {
+      return score + profile.baseScore + positiveMatches * 150 - negativeMatches * profile.penaltyScore;
+    }
+
+    return score - profile.baseScore * 0.65 - negativeMatches * profile.penaltyScore;
+  }, 0);
+}
+
+function mealKeywordIntentContext(items: MealItem[]): KeywordIntentContext {
+  const primary = getPrimaryMealItemFromItems(items);
+  const tags = items.flatMap((item) => item.recipe.tags);
+  const searchText = normalizeIntentText(
+    items
+      .flatMap((item) => [item.recipe.name, item.recipe.category, ...item.recipe.tags, ...item.ingredients.map((ingredient) => ingredient.food.name)])
+      .join(' '),
+  );
+  const primarySearchText = primary
+    ? normalizeIntentText(
+        [primary.recipe.name, primary.recipe.category, ...primary.recipe.tags, ...primary.ingredients.map((ingredient) => ingredient.food.name)].join(' '),
+      )
+    : searchText;
+
+  return {
+    tags,
+    searchText,
+    primaryTags: primary?.recipe.tags ?? tags,
+    primarySearchText,
+  };
+}
+
 function recipeSearchText(recipe: Recipe, foodMap: Map<string, Food>) {
   return normalizeIntentText(
     [
@@ -1131,7 +1316,6 @@ function isIntentCompatible(candidate: MealCandidate, intent: FreeTextIntent) {
     'curry',
     'yakiniku',
     'sushi',
-    'hotpot',
     'one-dish',
     'stir-fry',
     'spicy',
@@ -1252,6 +1436,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
     {
       label: '高タンパク案',
       rank: (candidate) =>
+        candidateKeywordIntentRank(candidate, intent) * 1.25 +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) -
@@ -1261,6 +1446,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
     {
       label: '低脂質案',
       rank: (candidate) =>
+        candidateKeywordIntentRank(candidate, intent) * 1.25 +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) +
@@ -1272,6 +1458,7 @@ function diversifyCandidates(candidates: MealCandidate[], input: MealInput, inte
     {
       label: '満足感重視案',
       rank: (candidate) =>
+        candidateKeywordIntentRank(candidate, intent) * 1.25 +
         macroFitRank(candidate) +
         candidateIntentRank(candidate, intent) * getIntentWeight(candidate.fitScore) +
         varietyScore(candidate, selected) +
@@ -1346,9 +1533,13 @@ function primaryDishKey(candidate: MealCandidate) {
 }
 
 function getPrimaryDishItem(candidate: MealCandidate) {
-  const staple = candidate.items.find((item) => item.role === '主食');
+  return getPrimaryMealItemFromItems(candidate.items);
+}
+
+function getPrimaryMealItemFromItems(items: MealItem[]) {
+  const staple = items.find((item) => item.role === '主食');
   if (staple && isOneDishRecipe(staple.recipe)) return staple;
-  return candidate.items.find((item) => item.role === '主菜') ?? staple ?? candidate.items[0];
+  return items.find((item) => item.role === '主菜') ?? staple ?? items[0];
 }
 
 function primaryMealStyleKey(candidate: MealCandidate) {
@@ -1461,6 +1652,16 @@ function candidateIntentRank(candidate: MealCandidate, intent: FreeTextIntent) {
   const includeScore = intent.includeTerms.filter((term) => searchText.includes(term)).length * 35;
   const penalty = intent.penaltyTerms.filter((term) => searchText.includes(term)).length * 220;
   return tagScore + includeScore - penalty;
+}
+
+function candidateKeywordIntentRank(candidate: MealCandidate, intent: FreeTextIntent) {
+  return scoreKeywordIntent(
+    {
+      ...mealKeywordIntentContext(candidate.items),
+      searchText: candidateSearchText(candidate),
+    },
+    intent,
+  );
 }
 
 function hasSimilarRecipeName(a: MealCandidate, b: MealCandidate) {
