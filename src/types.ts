@@ -149,6 +149,21 @@ export interface MealCandidate {
   caution: string;
 }
 
+export interface PlannedMealSlot {
+  id: string;
+  label: string;
+  timing: MealTiming;
+  meal: MealCandidate | null;
+}
+
+export interface DailyMealPlan {
+  id: string;
+  title: string;
+  slots: PlannedMealSlot[];
+  totals: MacroProfile;
+  diff: MacroDiffProfile;
+}
+
 export type MealHistorySource = 'suggestion' | 'detail' | 'shopping' | 'favorite' | 'adopted';
 
 export interface MealHistoryItem {

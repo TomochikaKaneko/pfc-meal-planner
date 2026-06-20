@@ -856,6 +856,161 @@ button {
   outline-offset: 3px;
 }
 
+.daily-plan-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.daily-plan-heading,
+.daily-slot-card {
+  border: 1px solid rgba(55, 91, 78, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 30px rgba(40, 79, 65, 0.08);
+}
+
+.daily-plan-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+}
+
+.daily-plan-heading h3,
+.daily-slot-header h4 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.daily-plan-heading h3 {
+  font-size: 1.05rem;
+}
+
+.daily-total-badge {
+  display: grid;
+  min-width: 74px;
+  place-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #2f7d68;
+}
+
+.daily-total-badge strong {
+  font-size: 1.12rem;
+  line-height: 1;
+}
+
+.daily-total-badge small {
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.daily-total-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.daily-total-grid div,
+.daily-slot-macros div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(47, 125, 104, 0.1);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.daily-total-grid span,
+.daily-total-grid small,
+.daily-slot-macros span {
+  color: #60776d;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.daily-total-grid strong,
+.daily-slot-macros strong {
+  color: #17211e;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.daily-total-grid strong small {
+  margin-left: 3px;
+}
+
+.daily-slot-list {
+  display: grid;
+  gap: 10px;
+}
+
+.daily-slot-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.daily-slot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.daily-slot-header h4 {
+  color: #23624f;
+  font-size: 0.98rem;
+}
+
+.daily-slot-main {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.daily-slot-main span {
+  color: #17211e;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.daily-slot-main small {
+  color: #60776d;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.daily-slot-macros {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.daily-slot-macros div {
+  padding: 7px;
+}
+
+.daily-slot-macros span {
+  white-space: nowrap;
+}
+
+.daily-slot-macros strong {
+  font-size: 0.9rem;
+}
+
+.multi-mode .daily-total-badge {
+  background: #c7763d;
+}
+
 .meal-heading {
   display: flex;
   justify-content: space-between;

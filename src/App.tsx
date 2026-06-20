@@ -5,7 +5,20 @@ import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
 import { storageKeys } from './storage/storageKeys';
 import { appendMealHistory, loadMealHistory, readStorageJson, writeStorageJson } from './storage/storageService';
-import type { ConditionTag, Food, FoodCategory, MacroKey, MacroTargetMode, MealCandidate, MealInput } from './types';
+import type {
+  ConditionTag,
+  DailyMealPlan,
+  Food,
+  FoodCategory,
+  MacroDiffProfile,
+  MacroKey,
+  MacroProfile,
+  MacroTargetMode,
+  MealCandidate,
+  MealInput,
+  MealTiming,
+  PlannedMealSlot,
+} from './types';
 
 const USER_FOODS_KEY = storageKeys.userFoods;
 const LAST_INPUT_KEY = storageKeys.lastInput;
@@ -143,6 +156,7 @@ export function App() {
   const [foodSearch, setFoodSearch] = useState('');
   const [foodCategoryFilter, setFoodCategoryFilter] = useState<FoodCategory | 'all'>('all');
   const [results, setResults] = useState<MealCandidate[]>([]);
+  const [dailyPlan, setDailyPlan] = useState<DailyMealPlan | null>(null);
   const [hasGeneratedResults, setHasGeneratedResults] = useState(false);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
   const [updateReady, setUpdateReady] = useState(false);
@@ -234,29 +248,52 @@ export function App() {
   }
 
   function suggestMeals() {
-    startMealGeneration(mealInput, freeCondition, 'home');
+    startMealGeneration(mealInput, freeCondition, 'home', mealPlanMode, multiMealPeriod);
   }
 
-  function startMealGeneration(input: MealInput, condition: string, source: 'home' | 'replan') {
+  function startMealGeneration(
+    input: MealInput,
+    condition: string,
+    source: 'home' | 'replan',
+    mode: MealPlanMode,
+    period: MultiMealPeriod,
+  ) {
     if (isPlanning) return;
     setPlanningSource(source);
     window.setTimeout(() => {
       try {
-        generateMeals(input, condition);
+        generateMeals(input, condition, mode, period);
       } finally {
         setPlanningSource(null);
       }
     }, 80);
   }
 
-  function generateMeals(input: MealInput, condition: string) {
+  function generateMeals(input: MealInput, condition: string, mode: MealPlanMode, period: MultiMealPeriod) {
     const safeInput = macroFields.reduce(
       (acc, field) => ({ ...acc, [field.key]: normalizeMacroTarget(input[field.key], null) }),
       { ...input },
     );
     const mealHistory = loadMealHistory();
     const recentMealKeys = mealHistory.items.map((item) => item.mealKey);
+
+    if (mode === 'multi' && period === 'day') {
+      const plan = createDailyMealPlan(safeInput, condition, recentMealKeys);
+      setDailyPlan(plan);
+      setResults([]);
+      appendMealHistory(plan.slots.flatMap((slot) => (slot.meal ? [slot.meal] : [])), 'suggestion');
+      setHasGeneratedResults(true);
+      setSelectedMeal(null);
+      setShouldScrollToResults(true);
+      setHasSavedReplanCondition(false);
+      setSavedReplanMealInput(null);
+      setSavedReplanFreeCondition(null);
+      setTab('results');
+      return;
+    }
+
     const candidates = createMealCandidates(safeInput, foods, undefined, parseFreeCondition(condition), excludedFoodIds, recentMealKeys);
+    setDailyPlan(null);
     setResults(candidates);
     appendMealHistory(candidates, 'suggestion');
     setHasGeneratedResults(true);
@@ -266,6 +303,49 @@ export function App() {
     setSavedReplanMealInput(null);
     setSavedReplanFreeCondition(null);
     setTab('results');
+  }
+
+  function createDailyMealPlan(input: MealInput, condition: string, recentMealKeys: string[]): DailyMealPlan {
+    const plannedSlots: PlannedMealSlot[] = [];
+    const freeTerms = parseFreeCondition(condition);
+    const usedMealKeys: string[] = [];
+
+    for (const slot of dailyMainMealSlots) {
+      const slotInput = scaleMealInputForSlot(input, slot.ratio, slot.timing);
+      const candidates = createMealCandidates(
+        slotInput,
+        foods,
+        undefined,
+        [...freeTerms, slot.timing],
+        excludedFoodIds,
+        [...recentMealKeys, ...usedMealKeys],
+      );
+      const picked = pickSlotCandidate(candidates, plannedSlots);
+      if (picked) usedMealKeys.push(picked.mealKey);
+      plannedSlots.push({ id: slot.timing, label: slot.label, timing: slot.timing, meal: picked });
+    }
+
+    const mainTotals = sumMacroProfiles(plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
+    const snackInput = createSnackInput(input, mainTotals);
+    const snackCandidates = createMealCandidates(
+      snackInput,
+      foods,
+      undefined,
+      [...freeTerms, 'snack'],
+      excludedFoodIds,
+      [...recentMealKeys, ...usedMealKeys],
+    );
+    const snack = pickSlotCandidate(snackCandidates, plannedSlots);
+    plannedSlots.push({ id: 'snack', label: '間食', timing: 'snack', meal: snack });
+
+    const totals = sumMacroProfiles(plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
+    return {
+      id: `daily-${Date.now()}`,
+      title: '1日献立',
+      slots: plannedSlots,
+      totals,
+      diff: diffMacroProfiles(totals, input),
+    };
   }
 
   function openReplanModal() {
@@ -308,7 +388,7 @@ export function App() {
 
   function executeSavedReplan() {
     if (!hasSavedReplanCondition || isPlanning) return;
-    startMealGeneration(savedReplanMealInput ?? mealInput, savedReplanFreeCondition ?? freeCondition, 'replan');
+    startMealGeneration(savedReplanMealInput ?? mealInput, savedReplanFreeCondition ?? freeCondition, 'replan', mealPlanMode, multiMealPeriod);
   }
 
   function saveFood(event: FormEvent<HTMLFormElement>) {
@@ -510,7 +590,9 @@ export function App() {
 
             <p className="tap-hint">献立をタップすると、材料や買い物リストを確認できます。</p>
 
-            {results.length === 0 ? (
+            {dailyPlan ? (
+              <DailyMealPlanView plan={dailyPlan} onOpenMeal={setSelectedMeal} />
+            ) : results.length === 0 ? (
               <NoResultState hasGenerated={hasGeneratedResults} freeCondition={freeCondition} excludedFoodCount={excludedFoodIds.length} />
             ) : (
               results.map((meal, index) => <MealCard meal={meal} rank={index + 1} key={meal.id} onOpen={() => setSelectedMeal(meal)} />)
@@ -1263,6 +1345,93 @@ function MealCard({ meal, rank, onOpen }: { meal: MealCandidate; rank: number; o
   );
 }
 
+function DailyMealPlanView({ plan, onOpenMeal }: { plan: DailyMealPlan; onOpenMeal: (meal: MealCandidate) => void }) {
+  return (
+    <section className="daily-plan-panel">
+      <div className="daily-plan-heading">
+        <div>
+          <p className="eyebrow">daily meal plan</p>
+          <h3>{plan.title}</h3>
+        </div>
+        <div className="daily-total-badge">
+          <strong>{plan.totals.kcal}</strong>
+          <small>kcal</small>
+        </div>
+      </div>
+
+      <div className="daily-total-grid">
+        {macroFields.map((field) => (
+          <MacroSummaryCell key={field.key} field={field} totals={plan.totals} diff={plan.diff} />
+        ))}
+      </div>
+
+      <div className="daily-slot-list">
+        {plan.slots.map((slot) => (
+          <DailyMealSlotCard slot={slot} onOpenMeal={onOpenMeal} key={slot.id} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DailyMealSlotCard({ slot, onOpenMeal }: { slot: PlannedMealSlot; onOpenMeal: (meal: MealCandidate) => void }) {
+  const meal = slot.meal;
+  return (
+    <article className="daily-slot-card">
+      <div className="daily-slot-header">
+        <h4>{slot.label}</h4>
+        {meal && (
+          <button className="text-button" type="button" onClick={() => onOpenMeal(meal)}>
+            詳細
+          </button>
+        )}
+      </div>
+      {meal ? (
+        <>
+          <button className="daily-slot-main" type="button" onClick={() => onOpenMeal(meal)}>
+            <span>{meal.title}</span>
+            <small>{meal.label}</small>
+          </button>
+          <div className="daily-slot-macros">
+            {macroFields.map((field) => (
+              <div key={`${slot.id}-${field.key}`}>
+                <span>{field.unit}</span>
+                <strong>{meal.totals[field.key]}</strong>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="muted-text">条件に合う候補が見つかりませんでした。</p>
+      )}
+    </article>
+  );
+}
+
+function MacroSummaryCell({
+  field,
+  totals,
+  diff,
+}: {
+  field: (typeof macroFields)[number];
+  totals: MacroProfile;
+  diff: MacroDiffProfile;
+}) {
+  const value = diff[field.key];
+  const diffClass = value === null ? '' : value > 0 ? 'plus' : value < 0 ? 'minus' : '';
+  const diffLabel = value === null ? '-' : `${value > 0 ? '+' : ''}${value}`;
+  return (
+    <div>
+      <span>{field.label}</span>
+      <strong>
+        {totals[field.key]}
+        {field.unit && <small>{field.unit}</small>}
+      </strong>
+      <small className={diffClass}>差分 {diffLabel}</small>
+    </div>
+  );
+}
+
 function ShoppingListScreen({
   items,
   onToggle,
@@ -1566,6 +1735,111 @@ function mealPlanModeHeading(mode: MealPlanMode, _period: MultiMealPeriod) {
 function mealPlanModeDescription(mode: MealPlanMode, _period: MultiMealPeriod) {
   if (mode === 'single') return '今日の残りや、この1食で摂りたい kcal / P / F / C を入力してください。';
   return '選択した期間に応じて、1日あたりの目安をもとに献立を作成します。';
+}
+
+const dailyMainMealSlots: Array<{ timing: Exclude<MealTiming, 'snack'>; label: string; ratio: number }> = [
+  { timing: 'breakfast', label: '朝食', ratio: 0.25 },
+  { timing: 'lunch', label: '昼食', ratio: 0.35 },
+  { timing: 'dinner', label: '夕食', ratio: 0.35 },
+];
+
+function scaleMealInputForSlot(input: MealInput, ratio: number, timing: MealTiming): MealInput {
+  return {
+    ...input,
+    kcal: scaleMacroTarget(input.kcal, ratio),
+    protein: scaleMacroTarget(input.protein, ratio),
+    fat: scaleMacroTarget(input.fat, ratio),
+    carb: scaleMacroTarget(input.carb, ratio),
+    tags: uniqueConditionTags([...input.tags.filter((tag) => !['breakfast', 'lunch', 'dinner', 'snack'].includes(tag)), timing]),
+  };
+}
+
+function createSnackInput(input: MealInput, currentTotals: MacroProfile): MealInput {
+  const remaining = {
+    kcal: remainingMacroTarget(input.kcal, currentTotals.kcal),
+    protein: remainingMacroTarget(input.protein, currentTotals.protein),
+    fat: remainingMacroTarget(input.fat, currentTotals.fat),
+    carb: remainingMacroTarget(input.carb, currentTotals.carb),
+  };
+  return {
+    ...input,
+    kcal: remaining.kcal !== null && remaining.kcal >= 80 ? remaining.kcal : 160,
+    protein: remaining.protein !== null && remaining.protein >= 8 ? remaining.protein : 15,
+    fat: remaining.fat !== null && remaining.fat > 0 ? remaining.fat : null,
+    carb: remaining.carb !== null && remaining.carb > 0 ? remaining.carb : null,
+    calorieMode: 'target',
+    proteinMode: 'minimum',
+    fatMode: remaining.fat !== null && remaining.fat > 0 ? input.fatMode : 'target',
+    carbMode: remaining.carb !== null && remaining.carb > 0 ? input.carbMode : 'target',
+    tags: uniqueConditionTags([...input.tags.filter((tag) => !['breakfast', 'lunch', 'dinner'].includes(tag)), 'snack', 'high-protein', 'quick']),
+  };
+}
+
+function scaleMacroTarget(value: number | null, ratio: number) {
+  return value === null ? null : roundMacro(value * ratio);
+}
+
+function remainingMacroTarget(value: number | null, current: number) {
+  return value === null ? null : roundMacro(Math.max(0, value - current));
+}
+
+function uniqueConditionTags(tags: ConditionTag[]) {
+  return Array.from(new Set(tags));
+}
+
+function pickSlotCandidate(candidates: MealCandidate[], plannedSlots: PlannedMealSlot[]) {
+  if (candidates.length === 0) return null;
+  return [...candidates].sort((a, b) => slotCandidateRank(b, plannedSlots) - slotCandidateRank(a, plannedSlots))[0];
+}
+
+function slotCandidateRank(candidate: MealCandidate, plannedSlots: PlannedMealSlot[]) {
+  const plannedMeals = plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal] : []));
+  const sameMeal = plannedMeals.some((meal) => meal.mealKey === candidate.mealKey) ? 900 : 0;
+  const sameTitle = plannedMeals.some((meal) => normalizePlanKey(meal.title) === normalizePlanKey(candidate.title)) ? 540 : 0;
+  const candidateProtein = planProteinSourceKey(candidate);
+  const sameProtein =
+    candidateProtein !== '' && plannedMeals.some((meal) => planProteinSourceKey(meal) === candidateProtein) ? 180 : 0;
+  const sameStyle =
+    primaryPlanStyleKey(candidate) !== '' && plannedMeals.some((meal) => primaryPlanStyleKey(meal) === primaryPlanStyleKey(candidate)) ? 80 : 0;
+  return candidate.score + candidate.fitScore * 18 + candidate.mealNaturalnessScore * 6 - sameMeal - sameTitle - sameProtein - sameStyle;
+}
+
+function normalizePlanKey(value: string) {
+  return value.replace(/\s/g, '').replace(/[・＋+]/g, '').replace(/定食|献立|風/g, '').toLowerCase();
+}
+
+function planProteinSourceKey(meal: MealCandidate) {
+  const proteinTags = ['chicken', 'beef', 'pork', 'fish', 'seafood', 'tofu', 'egg', 'dairy', 'protein'];
+  return meal.items.flatMap((item) => item.recipe.tags).find((tag) => proteinTags.includes(tag)) ?? '';
+}
+
+function primaryPlanStyleKey(meal: MealCandidate) {
+  return meal.items.flatMap((item) => item.recipe.tags).find((tag) => tag.startsWith('style:')) ?? '';
+}
+
+function sumMacroProfiles(profiles: MacroProfile[]): MacroProfile {
+  return profiles.reduce(
+    (total, item) => ({
+      kcal: roundMacro(total.kcal + item.kcal),
+      protein: roundMacro(total.protein + item.protein),
+      fat: roundMacro(total.fat + item.fat),
+      carb: roundMacro(total.carb + item.carb),
+    }),
+    { kcal: 0, protein: 0, fat: 0, carb: 0 },
+  );
+}
+
+function diffMacroProfiles(totals: MacroProfile, input: MealInput): MacroDiffProfile {
+  return {
+    kcal: input.kcal === null ? null : roundMacro(totals.kcal - input.kcal),
+    protein: input.protein === null ? null : roundMacro(totals.protein - input.protein),
+    fat: input.fat === null ? null : roundMacro(totals.fat - input.fat),
+    carb: input.carb === null ? null : roundMacro(totals.carb - input.carb),
+  };
+}
+
+function roundMacro(value: number) {
+  return Math.round(value * 10) / 10;
 }
 
 function categoryLabel(category: FoodCategory) {
