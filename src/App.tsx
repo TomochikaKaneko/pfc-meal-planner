@@ -13,6 +13,7 @@ import type {
   MacroDiffProfile,
   MacroKey,
   MacroProfile,
+  MacroTargetProfile,
   MacroTargetMode,
   MealCandidate,
   MealInput,
@@ -326,16 +327,7 @@ export function App() {
     }
 
     const mainTotals = sumMacroProfiles(plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
-    const snackInput = createSnackInput(input, mainTotals);
-    const snackCandidates = createMealCandidates(
-      snackInput,
-      foods,
-      undefined,
-      [...freeTerms, 'snack'],
-      excludedFoodIds,
-      [...recentMealKeys, ...usedMealKeys],
-    );
-    const snack = pickSlotCandidate(snackCandidates, plannedSlots);
+    const snack = createSnackCandidate(input, mainTotals, foods, excludedFoodIds);
     plannedSlots.push({ id: 'snack', label: '間食', timing: 'snack', meal: snack });
 
     const totals = sumMacroProfiles(plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
@@ -1402,7 +1394,7 @@ function DailyMealSlotCard({ slot, onOpenMeal }: { slot: PlannedMealSlot; onOpen
           </div>
         </>
       ) : (
-        <p className="muted-text">条件に合う候補が見つかりませんでした。</p>
+        <p className="muted-text">{slot.timing === 'snack' ? '間食なし' : '条件に合う候補が見つかりませんでした。'}</p>
       )}
     </article>
   );
@@ -1772,6 +1764,148 @@ function createSnackInput(input: MealInput, currentTotals: MacroProfile): MealIn
     fatMode: remaining.fat !== null && remaining.fat > 0 ? input.fatMode : 'target',
     carbMode: remaining.carb !== null && remaining.carb > 0 ? input.carbMode : 'target',
     tags: uniqueConditionTags([...input.tags.filter((tag) => !['breakfast', 'lunch', 'dinner'].includes(tag)), 'snack', 'high-protein', 'quick']),
+  };
+}
+
+const snackFriendlyCategories = new Set<FoodCategory>(['dairy', 'fruit', 'drink', 'snack', 'supplement']);
+const snackAllowedMainFoodIds = new Set(['protein-powder', 'boiled-egg', 'egg', 'onsen-egg', 'salad-chicken']);
+const snackForbiddenNameParts = [
+  '丼',
+  '定食',
+  'トースト',
+  'パスタ',
+  '麺',
+  'ライス',
+  'ご飯',
+  '白米',
+  'カレー',
+  'ハンバーグ',
+  'ステーキ',
+  '焼き魚',
+  '照り焼き',
+];
+
+function createSnackCandidate(
+  input: MealInput,
+  currentTotals: MacroProfile,
+  foods: Food[],
+  excludedFoodIds: string[],
+): MealCandidate | null {
+  const remaining = {
+    kcal: remainingMacroTarget(input.kcal, currentTotals.kcal),
+    protein: remainingMacroTarget(input.protein, currentTotals.protein),
+    fat: remainingMacroTarget(input.fat, currentTotals.fat),
+    carb: remainingMacroTarget(input.carb, currentTotals.carb),
+  };
+  const remainingKcal = remaining.kcal;
+  if (remainingKcal !== null && remainingKcal <= 40) return null;
+
+  const excludedFoodIdSet = new Set(excludedFoodIds);
+  const maxSnackKcal = remainingKcal === null ? 220 : Math.max(0, remainingKcal + 100);
+  if (maxSnackKcal <= 40) return null;
+
+  const targetSnackKcal = remainingKcal === null ? 150 : Math.min(180, Math.max(80, remainingKcal));
+  const candidates = foods
+    .filter((food) => isSnackFoodCandidate(food, excludedFoodIdSet))
+    .map((food) => buildSnackCandidateFromFood(food, input, remaining, targetSnackKcal, maxSnackKcal))
+    .filter((candidate): candidate is MealCandidate => Boolean(candidate))
+    .sort((a, b) => b.score - a.score);
+
+  return candidates[0] ?? null;
+}
+
+function isSnackFoodCandidate(food: Food, excludedFoodIdSet: Set<string>) {
+  if (excludedFoodIdSet.has(food.id)) return false;
+  if (snackForbiddenNameParts.some((part) => food.name.includes(part))) return false;
+  if (food.category === 'staple' || food.category === 'side' || food.category === 'soup' || food.category === 'seasoning') return false;
+  if (snackFriendlyCategories.has(food.category)) return true;
+  if (snackAllowedMainFoodIds.has(food.id)) return true;
+  return food.mealTiming.includes('snack') && !['staple', 'main'].includes(food.category);
+}
+
+function buildSnackCandidateFromFood(
+  food: Food,
+  input: MealInput,
+  remaining: MacroTargetProfile,
+  targetSnackKcal: number,
+  maxSnackKcal: number,
+): MealCandidate | null {
+  const totals = scaleFoodMacros(food, food.baseServing);
+  if (totals.kcal > maxSnackKcal) return null;
+
+  const score = scoreSnackFood(food, totals, remaining, targetSnackKcal);
+  const recipe = {
+    id: `snack-${food.id}`,
+    name: food.name,
+    category: food.category,
+    ingredients: [{ foodId: food.id, serving: food.baseServing }],
+    tags: Array.from(new Set([...food.tags, 'snack', 'role:support', 'title:avoid'])),
+    mealTiming: ['snack' as MealTiming],
+    description: '不足分を補うための軽い補食です。',
+    cookingTime: 0,
+    difficulty: 'easy' as const,
+    recipeUrl: '',
+  };
+  const item = {
+    recipe,
+    role: '間食',
+    ingredients: [
+      {
+        food,
+        serving: food.baseServing,
+        amount: food.standardAmount,
+        macros: totals,
+      },
+    ],
+    macros: totals,
+  };
+
+  return {
+    id: `daily-snack-${food.id}`,
+    mealKey: normalizePlanKey(`snack-${food.id}`),
+    templateName: '間食',
+    label: '補食',
+    title: food.name,
+    items: [item],
+    totals,
+    diff: diffMacroProfiles(totals, input),
+    score,
+    fitScore: Math.max(30, Math.min(100, score)),
+    mealSatisfactionScore: 60,
+    mealNaturalnessScore: 85,
+    reason: '朝食・昼食・夕食で不足した分を軽く補うための間食です。',
+    caution: '1日の目標カロリーを大きく超えない範囲で選んでいます。',
+  };
+}
+
+function scoreSnackFood(food: Food, totals: MacroProfile, remaining: MacroTargetProfile, targetSnackKcal: number) {
+  let score = 120 - Math.abs(totals.kcal - targetSnackKcal) * 0.35;
+  if (remaining.protein !== null && remaining.protein >= 8) {
+    score += totals.protein * 4;
+    if (food.tags.includes('high-protein')) score += 24;
+    if (['protein-powder', 'greek-yogurt', 'oikos', 'salad-chicken', 'boiled-egg'].includes(food.id)) score += 18;
+  }
+  if (remaining.carb !== null && remaining.carb >= 12) {
+    score += totals.carb * 1.3;
+    if (food.category === 'fruit') score += 24;
+  }
+  if (remaining.fat !== null && remaining.fat >= 5) {
+    score += totals.fat * 2.4;
+    if (food.tags.includes('cheese') || food.tags.includes('egg')) score += 18;
+  }
+  if (food.category === 'drink' && totals.kcal < 20 && targetSnackKcal >= 80) score -= 34;
+  if (food.tags.includes('snack') || food.mealTiming.includes('snack')) score += 10;
+  if (food.tags.includes('role:support') || food.tags.includes('serving:smallSide')) score += 6;
+  return roundMacro(score);
+}
+
+function scaleFoodMacros(food: Food, serving: number): MacroProfile {
+  const ratio = food.baseServing === 0 ? 0 : serving / food.baseServing;
+  return {
+    kcal: roundMacro(food.kcal * ratio),
+    protein: roundMacro(food.protein * ratio),
+    fat: roundMacro(food.fat * ratio),
+    carb: roundMacro(food.carb * ratio),
   };
 }
 
