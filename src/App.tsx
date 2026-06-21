@@ -371,11 +371,8 @@ export function App() {
   }
 
   function createDailyMealPlan(input: MealInput, condition: string, recentMealKeys: string[]): DailyMealPlan {
-    const plannedSlots: PlannedMealSlot[] = [];
     const freeTerms = parseFreeCondition(condition);
-    const usedMealKeys: string[] = [];
-
-    for (const slot of dailyMainMealSlots) {
+    const slotPools = dailyMainMealSlots.map((slot) => {
       const slotInput = scaleMealInputForSlot(input, slot.ratio, slot.timing);
       const candidates = createMealCandidates(
         slotInput,
@@ -383,16 +380,14 @@ export function App() {
         undefined,
         [...freeTerms, slot.timing],
         excludedFoodIds,
-        [...recentMealKeys, ...usedMealKeys],
+        recentMealKeys,
       );
-      const picked = pickSlotCandidate(candidates, plannedSlots, slot.timing);
-      if (picked) usedMealKeys.push(picked.mealKey);
-      plannedSlots.push({ id: slot.timing, label: slot.label, timing: slot.timing, meal: picked });
-    }
-
-    const mainTotals = sumMacroProfiles(plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
-    const snack = createSnackCandidate(input, mainTotals, foods, excludedFoodIds);
-    plannedSlots.push({ id: 'snack', label: '間食', timing: 'snack', meal: snack });
+      const rankedCandidates = [...candidates]
+        .sort((a, b) => slotCandidateRank(b, [], slot.timing) - slotCandidateRank(a, [], slot.timing))
+        .slice(0, DAILY_SLOT_CANDIDATE_LIMIT);
+      return { slot, candidates: rankedCandidates.length > 0 ? rankedCandidates : [null] };
+    });
+    const plannedSlots = selectDailyMealSlots(input, slotPools, foods, excludedFoodIds);
 
     const totals = sumMacroProfiles(plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
     return {
@@ -2041,11 +2036,114 @@ function mealPlanModeDescription(mode: MealPlanMode, _period: MultiMealPeriod) {
   return '選択した期間に応じて、1日あたりの目安をもとに献立を作成します。';
 }
 
-const dailyMainMealSlots: Array<{ timing: Exclude<MealTiming, 'snack'>; label: string; ratio: number }> = [
+type DailyMainMealSlot = { timing: Exclude<MealTiming, 'snack'>; label: string; ratio: number };
+type DailySlotCandidatePool = { slot: DailyMainMealSlot; candidates: Array<MealCandidate | null> };
+
+const DAILY_SLOT_CANDIDATE_LIMIT = 8;
+
+const dailyMainMealSlots: DailyMainMealSlot[] = [
   { timing: 'breakfast', label: '朝食', ratio: 0.2 },
   { timing: 'lunch', label: '昼食', ratio: 0.28 },
   { timing: 'dinner', label: '夕食', ratio: 0.28 },
 ];
+
+function selectDailyMealSlots(
+  input: MealInput,
+  slotPools: DailySlotCandidatePool[],
+  foods: Food[],
+  excludedFoodIds: string[],
+) {
+  let bestSlots: PlannedMealSlot[] | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  const [breakfastPool, lunchPool, dinnerPool] = slotPools;
+
+  for (const breakfast of breakfastPool.candidates) {
+    for (const lunch of lunchPool.candidates) {
+      for (const dinner of dinnerPool.candidates) {
+        const mainSlots: PlannedMealSlot[] = [
+          { id: breakfastPool.slot.timing, label: breakfastPool.slot.label, timing: breakfastPool.slot.timing, meal: breakfast },
+          { id: lunchPool.slot.timing, label: lunchPool.slot.label, timing: lunchPool.slot.timing, meal: lunch },
+          { id: dinnerPool.slot.timing, label: dinnerPool.slot.label, timing: dinnerPool.slot.timing, meal: dinner },
+        ];
+        const mainTotals = sumMacroProfiles(mainSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
+        const snack = createSnackCandidate(input, mainTotals, foods, excludedFoodIds);
+        const slots = [...mainSlots, { id: 'snack', label: '間食', timing: 'snack' as MealTiming, meal: snack }];
+        const score = dailyPlanCombinationScore(input, slots);
+        if (score > bestScore) {
+          bestScore = score;
+          bestSlots = slots;
+        }
+      }
+    }
+  }
+
+  return bestSlots ?? [
+    { id: 'breakfast', label: '朝食', timing: 'breakfast', meal: null },
+    { id: 'lunch', label: '昼食', timing: 'lunch', meal: null },
+    { id: 'dinner', label: '夕食', timing: 'dinner', meal: null },
+    { id: 'snack', label: '間食', timing: 'snack', meal: null },
+  ];
+}
+
+function dailyPlanCombinationScore(input: MealInput, slots: PlannedMealSlot[]) {
+  const totals = sumMacroProfiles(slots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
+  const mainSlots = slots.filter((slot) => slot.timing !== 'snack');
+  const meals = slots.flatMap((slot) => (slot.meal ? [slot.meal] : []));
+  let score = dailyMacroBalanceScore(totals, input);
+  for (const slot of mainSlots) {
+    if (!slot.meal) continue;
+    score -= dailyMainMealMacroPenalty(slot.meal, slot.timing) * 3.2;
+  }
+  score -= dailyMainTotalOverreachPenalty(input, mainSlots);
+  score -= dailyMealDuplicatePenalty(meals);
+  score += meals.reduce((total, meal) => total + meal.mealNaturalnessScore * 1.2 + meal.mealSatisfactionScore * 0.8, 0);
+  return score;
+}
+
+function dailyMacroBalanceScore(totals: MacroProfile, input: MealInput) {
+  const scoreTargets: Array<{ key: MacroKey; tolerance: number; weight: number }> = [
+    { key: 'kcal', tolerance: 0.1, weight: 1400 },
+    { key: 'protein', tolerance: 0.1, weight: 1200 },
+    { key: 'fat', tolerance: 0.15, weight: 1000 },
+    { key: 'carb', tolerance: 0.15, weight: 1000 },
+  ];
+  return scoreTargets.reduce((score, target) => {
+    const value = input[target.key];
+    if (value === null || value <= 0) return score;
+    const ratioError = Math.abs(totals[target.key] - value) / value;
+    return score - Math.pow(ratioError / target.tolerance, 2) * target.weight;
+  }, 12000);
+}
+
+function dailyMainTotalOverreachPenalty(input: MealInput, mainSlots: PlannedMealSlot[]) {
+  const mainTotals = sumMacroProfiles(mainSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
+  let penalty = 0;
+  if (input.protein !== null && input.protein > 0 && mainTotals.protein > input.protein * 0.85) {
+    penalty += (mainTotals.protein - input.protein * 0.85) * 120;
+  }
+  if (input.kcal !== null && input.kcal > 0 && mainTotals.kcal > input.kcal * 0.88) {
+    penalty += (mainTotals.kcal - input.kcal * 0.88) * 2.8;
+  }
+  return penalty;
+}
+
+function dailyMealDuplicatePenalty(meals: MealCandidate[]) {
+  let penalty = 0;
+  const mealKeys = new Set<string>();
+  const proteinKeys = new Set<string>();
+  const styleKeys = new Set<string>();
+  for (const meal of meals) {
+    if (mealKeys.has(meal.mealKey)) penalty += 900;
+    mealKeys.add(meal.mealKey);
+    const proteinKey = planProteinSourceKey(meal);
+    if (proteinKey && proteinKeys.has(proteinKey)) penalty += 120;
+    if (proteinKey) proteinKeys.add(proteinKey);
+    const styleKey = primaryPlanStyleKey(meal);
+    if (styleKey && styleKeys.has(styleKey)) penalty += 60;
+    if (styleKey) styleKeys.add(styleKey);
+  }
+  return penalty;
+}
 
 function scaleMealInputForSlot(input: MealInput, ratio: number, timing: MealTiming): MealInput {
   return {
@@ -2271,17 +2369,20 @@ function slotCandidateRank(candidate: MealCandidate, plannedSlots: PlannedMealSl
 
 function dailyMainMealMacroPenalty(candidate: MealCandidate, timing: MealTiming) {
   if (timing === 'snack') return 0;
-  const proteinRange = timing === 'breakfast' ? { min: 20, max: 35 } : { min: 25, max: 45 };
+  const proteinRange = timing === 'breakfast' ? { min: 20, max: 35 } : { min: 25, max: 40 };
   let penalty = 0;
   const protein = candidate.totals.protein;
   if (protein < proteinRange.min) penalty += (proteinRange.min - protein) * 18;
-  if (protein > proteinRange.max) penalty += (protein - proteinRange.max) * 42;
-  if (protein > 50) penalty += (protein - 50) * 90 + 420;
-  if (protein > 60) penalty += (protein - 60) * 160 + 760;
+  if (protein > proteinRange.max) penalty += (protein - proteinRange.max) * 70;
+  if (protein > 45) penalty += (protein - 45) * 120 + 420;
+  if (protein > 50) penalty += (protein - 50) * 220 + 900;
+  if (protein > 55) penalty += (protein - 55) * 360 + 1600;
+  if (protein > 60) penalty += (protein - 60) * 520 + 2600;
 
   const kcal = candidate.totals.kcal;
   if (kcal > 800) penalty += (kcal - 800) * 2.2 + 260;
   if (kcal > 900) penalty += (kcal - 900) * 4.5 + 580;
+  if (kcal > 1000) penalty += (kcal - 1000) * 8 + 1200;
   return penalty;
 }
 
