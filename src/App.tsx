@@ -35,6 +35,8 @@ import type {
 
 const USER_FOODS_KEY = storageKeys.userFoods;
 const LAST_INPUT_KEY = storageKeys.lastInput;
+const SINGLE_TARGETS_KEY = storageKeys.singleTargets;
+const MULTI_TARGETS_KEY = storageKeys.multiTargets;
 const FREE_CONDITION_KEY = storageKeys.freeCondition;
 const EXCLUDED_FOODS_KEY = storageKeys.excludedFoodIds;
 const SHOPPING_LIST_KEY = storageKeys.shoppingList;
@@ -126,10 +128,22 @@ const categoryValues = new Set(categoryOptions.map((option) => option.value));
 const conditionValues = new Set([...conditionOptions, ...legacyConditionOptions].map((option) => option.value));
 
 const defaultInput: MealInput = {
-  kcal: 550,
+  kcal: 650,
   protein: 35,
   fat: 15,
-  carb: 70,
+  carb: 85,
+  calorieMode: 'target',
+  proteinMode: 'target',
+  fatMode: 'target',
+  carbMode: 'target',
+  tags: [],
+};
+
+const defaultMultiInput: MealInput = {
+  kcal: 2300,
+  protein: 160,
+  fat: 60,
+  carb: 260,
   calorieMode: 'target',
   proteinMode: 'target',
   fatMode: 'target',
@@ -157,7 +171,8 @@ interface ShoppingListItem {
 
 export function App() {
   const [tab, setTab] = useState<Tab>('home');
-  const [mealInput, setMealInput] = useState<MealInput>(() => loadMealInput());
+  const [singleTargets, setSingleTargets] = useState<MealInput>(() => loadSingleTargets());
+  const [multiTargets, setMultiTargets] = useState<MealInput>(() => loadMultiTargets());
   const [mealPlanMode, setMealPlanMode] = useState<MealPlanMode>('single');
   const [multiMealPeriod, setMultiMealPeriod] = useState<MultiMealPeriod>('day');
   const [freeCondition, setFreeCondition] = useState(() => loadFreeCondition());
@@ -175,7 +190,8 @@ export function App() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [numericInputFocused, setNumericInputFocused] = useState(false);
   const [isReplanModalOpen, setIsReplanModalOpen] = useState(false);
-  const [draftMealInput, setDraftMealInput] = useState<MealInput>(() => loadMealInput());
+  const [draftSingleTargets, setDraftSingleTargets] = useState<MealInput>(() => loadSingleTargets());
+  const [draftMultiTargets, setDraftMultiTargets] = useState<MealInput>(() => loadMultiTargets());
   const [draftMealPlanMode, setDraftMealPlanMode] = useState<MealPlanMode>('single');
   const [draftMultiMealPeriod, setDraftMultiMealPeriod] = useState<MultiMealPeriod>('day');
   const [draftFreeCondition, setDraftFreeCondition] = useState(() => loadFreeCondition());
@@ -190,6 +206,8 @@ export function App() {
   const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
   const isPlanning = planningSource !== null;
+  const mealInput = mealPlanMode === 'single' ? singleTargets : multiTargets;
+  const draftMealInput = draftMealPlanMode === 'single' ? draftSingleTargets : draftMultiTargets;
 
   const foods = useMemo(() => [...initialFoods, ...normalizeUserFoods(userFoods)], [userFoods]);
   const filteredFoods = useMemo(() => filterFoods(foods, foodSearch, foodCategoryFilter), [foods, foodSearch, foodCategoryFilter]);
@@ -220,20 +238,35 @@ export function App() {
 
   function updateInput(key: MacroKey, rawValue: string) {
     const next = { ...mealInput, [key]: parseMacroValue(rawValue) };
-    setMealInput(next);
-    writeStorageJson(LAST_INPUT_KEY, next);
+    updateTargetsForMode(mealPlanMode, next);
   }
 
   function updateInputMode(key: MacroKey, mode: MacroTargetMode) {
     const next = { ...mealInput, [macroModeField[key]]: mode };
-    setMealInput(next);
-    writeStorageJson(LAST_INPUT_KEY, next);
+    updateTargetsForMode(mealPlanMode, next);
   }
 
   function updateTags(tags: ConditionTag[]) {
     const next = { ...mealInput, tags };
-    setMealInput(next);
-    writeStorageJson(LAST_INPUT_KEY, next);
+    updateTargetsForMode(mealPlanMode, next);
+  }
+
+  function updateTargetsForMode(mode: MealPlanMode, next: MealInput) {
+    if (mode === 'single') {
+      setSingleTargets(next);
+      writeStorageJson(SINGLE_TARGETS_KEY, next);
+    } else {
+      setMultiTargets(next);
+      writeStorageJson(MULTI_TARGETS_KEY, next);
+    }
+  }
+
+  function updateDraftTargetsForMode(mode: MealPlanMode, next: MealInput) {
+    if (mode === 'single') {
+      setDraftSingleTargets(next);
+    } else {
+      setDraftMultiTargets(next);
+    }
   }
 
   function updateFreeCondition(value: string) {
@@ -372,7 +405,8 @@ export function App() {
   }
 
   function openReplanModal() {
-    setDraftMealInput(savedReplanMealInput ?? mealInput);
+    setDraftSingleTargets(mealPlanMode === 'single' && savedReplanMealInput ? savedReplanMealInput : singleTargets);
+    setDraftMultiTargets(mealPlanMode === 'multi' && savedReplanMealInput ? savedReplanMealInput : multiTargets);
     setDraftMealPlanMode(mealPlanMode);
     setDraftMultiMealPeriod(multiMealPeriod);
     setDraftFreeCondition(savedReplanFreeCondition ?? freeCondition);
@@ -380,30 +414,30 @@ export function App() {
   }
 
   function updateDraftInput(key: MacroKey, rawValue: string) {
-    setDraftMealInput((current) => ({ ...current, [key]: parseMacroValue(rawValue) }));
+    updateDraftTargetsForMode(draftMealPlanMode, { ...draftMealInput, [key]: parseMacroValue(rawValue) });
   }
 
   function updateDraftInputMode(key: MacroKey, mode: MacroTargetMode) {
-    setDraftMealInput((current) => ({ ...current, [macroModeField[key]]: mode }));
+    updateDraftTargetsForMode(draftMealPlanMode, { ...draftMealInput, [macroModeField[key]]: mode });
   }
 
   function toggleDraftTag(tag: ConditionTag) {
-    setDraftMealInput((current) => {
-      const exists = current.tags.includes(tag);
-      return { ...current, tags: exists ? current.tags.filter((item) => item !== tag) : [...current.tags, tag] };
+    const exists = draftMealInput.tags.includes(tag);
+    updateDraftTargetsForMode(draftMealPlanMode, {
+      ...draftMealInput,
+      tags: exists ? draftMealInput.tags.filter((item) => item !== tag) : [...draftMealInput.tags, tag],
     });
   }
 
   function saveReplanCondition() {
     const nextInput = { ...draftMealInput, tags: [...draftMealInput.tags] };
     const nextFreeCondition = draftFreeCondition;
-    setMealInput(nextInput);
+    updateTargetsForMode(draftMealPlanMode, nextInput);
     setMealPlanMode(draftMealPlanMode);
     setMultiMealPeriod(draftMultiMealPeriod);
     setFreeCondition(nextFreeCondition);
     setSavedReplanMealInput(nextInput);
     setSavedReplanFreeCondition(nextFreeCondition);
-    writeStorageJson(LAST_INPUT_KEY, nextInput);
     writeStorageJson(FREE_CONDITION_KEY, nextFreeCondition);
     setHasSavedReplanCondition(true);
     setIsReplanModalOpen(false);
@@ -498,9 +532,8 @@ export function App() {
     setResults(item.dailyPlan ? [] : item.meals);
     setMealPlanMode(item.mode);
     setMultiMealPeriod(item.multiMealPeriod ?? 'day');
-    setMealInput(item.target);
+    updateTargetsForMode(item.mode, item.target);
     setFreeCondition(item.condition);
-    writeStorageJson(LAST_INPUT_KEY, item.target);
     writeStorageJson(FREE_CONDITION_KEY, item.condition);
     setHasGeneratedResults(true);
     setSelectedHistoryItem(null);
@@ -510,11 +543,10 @@ export function App() {
   }
 
   function replanFromHistoryItem(item: GeneratedMealHistoryItem) {
-    setMealInput(item.target);
+    updateTargetsForMode(item.mode, item.target);
     setMealPlanMode(item.mode);
     setMultiMealPeriod(item.multiMealPeriod ?? 'day');
     setFreeCondition(item.condition);
-    writeStorageJson(LAST_INPUT_KEY, item.target);
     writeStorageJson(FREE_CONDITION_KEY, item.condition);
     setSelectedHistoryItem(null);
     startMealGeneration(item.target, item.condition, 'replan', item.mode, item.multiMealPeriod ?? 'day');
@@ -2435,8 +2467,14 @@ function formatInputValue(value: number | null) {
   return String(value).replace(/^0+(?=\d)/, '');
 }
 
-function loadMealInput(): MealInput {
-  return normalizeMealInput(readStorageJson<unknown>(LAST_INPUT_KEY, defaultInput));
+function loadSingleTargets(): MealInput {
+  const stored = readStorageJson<unknown>(SINGLE_TARGETS_KEY, null);
+  if (stored !== null) return normalizeMealInput(stored, defaultInput);
+  return normalizeMealInput(readStorageJson<unknown>(LAST_INPUT_KEY, defaultInput), defaultInput);
+}
+
+function loadMultiTargets(): MealInput {
+  return normalizeMealInput(readStorageJson<unknown>(MULTI_TARGETS_KEY, defaultMultiInput), defaultMultiInput);
 }
 
 function loadFreeCondition() {
@@ -2481,21 +2519,21 @@ function normalizeStringArray(value: unknown): string[] {
   return [...new Set(value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim()))];
 }
 
-function normalizeMealInput(value: unknown): MealInput {
-  if (!isRecord(value)) return defaultInput;
+function normalizeMealInput(value: unknown, fallback: MealInput): MealInput {
+  if (!isRecord(value)) return fallback;
   const tags = Array.isArray(value.tags)
     ? value.tags.filter((tag): tag is ConditionTag => typeof tag === 'string' && conditionValues.has(tag as ConditionTag))
-    : defaultInput.tags;
+    : fallback.tags;
 
   return {
-    kcal: normalizeMacroTarget(value.kcal, defaultInput.kcal),
-    protein: normalizeMacroTarget(value.protein, defaultInput.protein),
-    fat: normalizeMacroTarget(value.fat, defaultInput.fat),
-    carb: normalizeMacroTarget(value.carb, defaultInput.carb),
-    calorieMode: normalizeMacroTargetMode(value.calorieMode, defaultInput.calorieMode),
-    proteinMode: normalizeMacroTargetMode(value.proteinMode, defaultInput.proteinMode),
-    fatMode: normalizeMacroTargetMode(value.fatMode, defaultInput.fatMode),
-    carbMode: normalizeMacroTargetMode(value.carbMode, defaultInput.carbMode),
+    kcal: normalizeMacroTarget(value.kcal, fallback.kcal),
+    protein: normalizeMacroTarget(value.protein, fallback.protein),
+    fat: normalizeMacroTarget(value.fat, fallback.fat),
+    carb: normalizeMacroTarget(value.carb, fallback.carb),
+    calorieMode: normalizeMacroTargetMode(value.calorieMode, fallback.calorieMode),
+    proteinMode: normalizeMacroTargetMode(value.proteinMode, fallback.proteinMode),
+    fatMode: normalizeMacroTargetMode(value.fatMode, fallback.fatMode),
+    carbMode: normalizeMacroTargetMode(value.carbMode, fallback.carbMode),
     tags,
   };
 }
