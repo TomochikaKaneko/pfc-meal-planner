@@ -321,7 +321,7 @@ export function App() {
         excludedFoodIds,
         [...recentMealKeys, ...usedMealKeys],
       );
-      const picked = pickSlotCandidate(candidates, plannedSlots);
+      const picked = pickSlotCandidate(candidates, plannedSlots, slot.timing);
       if (picked) usedMealKeys.push(picked.mealKey);
       plannedSlots.push({ id: slot.timing, label: slot.label, timing: slot.timing, meal: picked });
     }
@@ -1730,9 +1730,9 @@ function mealPlanModeDescription(mode: MealPlanMode, _period: MultiMealPeriod) {
 }
 
 const dailyMainMealSlots: Array<{ timing: Exclude<MealTiming, 'snack'>; label: string; ratio: number }> = [
-  { timing: 'breakfast', label: '朝食', ratio: 0.25 },
-  { timing: 'lunch', label: '昼食', ratio: 0.35 },
-  { timing: 'dinner', label: '夕食', ratio: 0.35 },
+  { timing: 'breakfast', label: '朝食', ratio: 0.2 },
+  { timing: 'lunch', label: '昼食', ratio: 0.28 },
+  { timing: 'dinner', label: '夕食', ratio: 0.28 },
 ];
 
 function scaleMealInputForSlot(input: MealInput, ratio: number, timing: MealTiming): MealInput {
@@ -1807,7 +1807,11 @@ function createSnackCandidate(
   const targetSnackKcal = remainingKcal === null ? 150 : Math.min(180, Math.max(80, remainingKcal));
   const candidates = foods
     .filter((food) => isSnackFoodCandidate(food, excludedFoodIdSet))
-    .map((food) => buildSnackCandidateFromFood(food, input, remaining, targetSnackKcal, maxSnackKcal))
+    .flatMap((food) =>
+      snackServingOptions(food, maxSnackKcal).map((serving) =>
+        buildSnackCandidateFromFood(food, serving, input, remaining, targetSnackKcal, maxSnackKcal),
+      ),
+    )
     .filter((candidate): candidate is MealCandidate => Boolean(candidate))
     .sort((a, b) => b.score - a.score);
 
@@ -1823,14 +1827,28 @@ function isSnackFoodCandidate(food: Food, excludedFoodIdSet: Set<string>) {
   return food.mealTiming.includes('snack') && !['staple', 'main'].includes(food.category);
 }
 
+function snackServingOptions(food: Food, maxSnackKcal: number) {
+  const baseServing = food.baseServing;
+  const options = [baseServing];
+  if (['protein-powder', 'greek-yogurt', 'fat-free-yogurt', 'oikos'].includes(food.id)) options.push(baseServing * 2);
+  if (food.id === 'boiled-egg' || food.id === 'egg') options.push(baseServing * 2);
+  return Array.from(new Set(options)).filter((serving) => scaleFoodMacros(food, serving).kcal <= maxSnackKcal);
+}
+
+function formatSnackServing(food: Food, serving: number) {
+  if (serving === food.baseServing) return food.standardAmount;
+  return `${roundMacro(serving)}${food.servingUnit}`;
+}
+
 function buildSnackCandidateFromFood(
   food: Food,
+  serving: number,
   input: MealInput,
   remaining: MacroTargetProfile,
   targetSnackKcal: number,
   maxSnackKcal: number,
 ): MealCandidate | null {
-  const totals = scaleFoodMacros(food, food.baseServing);
+  const totals = scaleFoodMacros(food, serving);
   if (totals.kcal > maxSnackKcal) return null;
 
   const score = scoreSnackFood(food, totals, remaining, targetSnackKcal);
@@ -1838,7 +1856,7 @@ function buildSnackCandidateFromFood(
     id: `snack-${food.id}`,
     name: food.name,
     category: food.category,
-    ingredients: [{ foodId: food.id, serving: food.baseServing }],
+    ingredients: [{ foodId: food.id, serving }],
     tags: Array.from(new Set([...food.tags, 'snack', 'role:support', 'title:avoid'])),
     mealTiming: ['snack' as MealTiming],
     description: '不足分を補うための軽い補食です。',
@@ -1852,8 +1870,8 @@ function buildSnackCandidateFromFood(
     ingredients: [
       {
         food,
-        serving: food.baseServing,
-        amount: food.standardAmount,
+        serving,
+        amount: formatSnackServing(food, serving),
         macros: totals,
       },
     ],
@@ -1861,8 +1879,8 @@ function buildSnackCandidateFromFood(
   };
 
   return {
-    id: `daily-snack-${food.id}`,
-    mealKey: normalizePlanKey(`snack-${food.id}`),
+    id: `daily-snack-${food.id}-${serving}`,
+    mealKey: normalizePlanKey(`snack-${food.id}-${serving}`),
     templateName: '間食',
     label: '補食',
     title: food.name,
@@ -1921,12 +1939,12 @@ function uniqueConditionTags(tags: ConditionTag[]) {
   return Array.from(new Set(tags));
 }
 
-function pickSlotCandidate(candidates: MealCandidate[], plannedSlots: PlannedMealSlot[]) {
+function pickSlotCandidate(candidates: MealCandidate[], plannedSlots: PlannedMealSlot[], timing?: MealTiming) {
   if (candidates.length === 0) return null;
-  return [...candidates].sort((a, b) => slotCandidateRank(b, plannedSlots) - slotCandidateRank(a, plannedSlots))[0];
+  return [...candidates].sort((a, b) => slotCandidateRank(b, plannedSlots, timing) - slotCandidateRank(a, plannedSlots, timing))[0];
 }
 
-function slotCandidateRank(candidate: MealCandidate, plannedSlots: PlannedMealSlot[]) {
+function slotCandidateRank(candidate: MealCandidate, plannedSlots: PlannedMealSlot[], timing?: MealTiming) {
   const plannedMeals = plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal] : []));
   const sameMeal = plannedMeals.some((meal) => meal.mealKey === candidate.mealKey) ? 900 : 0;
   const sameTitle = plannedMeals.some((meal) => normalizePlanKey(meal.title) === normalizePlanKey(candidate.title)) ? 540 : 0;
@@ -1935,7 +1953,24 @@ function slotCandidateRank(candidate: MealCandidate, plannedSlots: PlannedMealSl
     candidateProtein !== '' && plannedMeals.some((meal) => planProteinSourceKey(meal) === candidateProtein) ? 180 : 0;
   const sameStyle =
     primaryPlanStyleKey(candidate) !== '' && plannedMeals.some((meal) => primaryPlanStyleKey(meal) === primaryPlanStyleKey(candidate)) ? 80 : 0;
-  return candidate.score + candidate.fitScore * 18 + candidate.mealNaturalnessScore * 6 - sameMeal - sameTitle - sameProtein - sameStyle;
+  const slotMacroPenalty = timing ? dailyMainMealMacroPenalty(candidate, timing) : 0;
+  return candidate.score + candidate.fitScore * 18 + candidate.mealNaturalnessScore * 6 - sameMeal - sameTitle - sameProtein - sameStyle - slotMacroPenalty;
+}
+
+function dailyMainMealMacroPenalty(candidate: MealCandidate, timing: MealTiming) {
+  if (timing === 'snack') return 0;
+  const proteinRange = timing === 'breakfast' ? { min: 20, max: 35 } : { min: 25, max: 45 };
+  let penalty = 0;
+  const protein = candidate.totals.protein;
+  if (protein < proteinRange.min) penalty += (proteinRange.min - protein) * 18;
+  if (protein > proteinRange.max) penalty += (protein - proteinRange.max) * 42;
+  if (protein > 50) penalty += (protein - 50) * 90 + 420;
+  if (protein > 60) penalty += (protein - 60) * 160 + 760;
+
+  const kcal = candidate.totals.kcal;
+  if (kcal > 800) penalty += (kcal - 800) * 2.2 + 260;
+  if (kcal > 900) penalty += (kcal - 900) * 4.5 + 580;
+  return penalty;
 }
 
 function normalizePlanKey(value: string) {
