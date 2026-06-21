@@ -1,8 +1,21 @@
-import type { MealCandidate, MealHistoryItem, MealHistorySource, MealHistoryStorage } from '../types';
+import type {
+  DailyMealPlan,
+  GeneratedMealHistoryItem,
+  GeneratedMealHistoryStorage,
+  MealCandidate,
+  MealHistoryItem,
+  MealHistorySource,
+  MealHistoryStorage,
+  MealInput,
+  MealPlanMode,
+  MultiMealPeriod,
+} from '../types';
 import { storageKeys } from './storageKeys';
 
 const MEAL_HISTORY_SCHEMA_VERSION = 1;
 const MEAL_HISTORY_LIMIT = 30;
+const GENERATED_MEAL_HISTORY_SCHEMA_VERSION = 1;
+const GENERATED_MEAL_HISTORY_LIMIT = 100;
 
 export function readStorageJson<T>(key: string, fallback: T): T {
   try {
@@ -48,6 +61,75 @@ export function appendMealHistory(candidates: MealCandidate[], source: MealHisto
   return next;
 }
 
+export function loadGeneratedMealHistory(): GeneratedMealHistoryStorage {
+  return normalizeGeneratedMealHistory(readStorageJson<unknown>(storageKeys.generatedMealHistory, null));
+}
+
+export function appendGeneratedMealHistory({
+  mode,
+  multiMealPeriod,
+  target,
+  condition,
+  meals,
+  dailyPlan,
+}: {
+  mode: MealPlanMode;
+  multiMealPeriod?: MultiMealPeriod;
+  target: MealInput;
+  condition: string;
+  meals: MealCandidate[];
+  dailyPlan?: DailyMealPlan;
+}) {
+  if (meals.length === 0 && !dailyPlan) return loadGeneratedMealHistory();
+
+  const current = loadGeneratedMealHistory();
+  const createdAt = new Date().toISOString();
+  const mealTitles = dailyPlan
+    ? dailyPlan.slots.flatMap((slot) => (slot.meal ? [slot.meal.title] : []))
+    : meals.map((meal) => meal.title);
+  const total = dailyPlan?.totals ?? meals[0]?.totals ?? { kcal: 0, protein: 0, fat: 0, carb: 0 };
+  const title = mealTitles.slice(0, 3).join('、') || '献立';
+  const item: GeneratedMealHistoryItem = {
+    id: createGeneratedHistoryId(),
+    createdAt,
+    mode,
+    multiMealPeriod,
+    condition,
+    target,
+    total,
+    title,
+    mealTitles,
+    meals,
+    dailyPlan,
+  };
+
+  const next: GeneratedMealHistoryStorage = {
+    schemaVersion: GENERATED_MEAL_HISTORY_SCHEMA_VERSION,
+    items: [item, ...current.items].slice(0, GENERATED_MEAL_HISTORY_LIMIT),
+  };
+  writeStorageJson(storageKeys.generatedMealHistory, next);
+  return next;
+}
+
+export function deleteGeneratedMealHistoryItem(id: string) {
+  const current = loadGeneratedMealHistory();
+  const next: GeneratedMealHistoryStorage = {
+    schemaVersion: GENERATED_MEAL_HISTORY_SCHEMA_VERSION,
+    items: current.items.filter((item) => item.id !== id),
+  };
+  writeStorageJson(storageKeys.generatedMealHistory, next);
+  return next;
+}
+
+export function clearGeneratedMealHistory() {
+  const next: GeneratedMealHistoryStorage = {
+    schemaVersion: GENERATED_MEAL_HISTORY_SCHEMA_VERSION,
+    items: [],
+  };
+  writeStorageJson(storageKeys.generatedMealHistory, next);
+  return next;
+}
+
 function normalizeMealHistory(value: unknown): MealHistoryStorage {
   if (!isRecord(value) || value.schemaVersion !== MEAL_HISTORY_SCHEMA_VERSION || !Array.isArray(value.items)) {
     return { schemaVersion: MEAL_HISTORY_SCHEMA_VERSION, items: [] };
@@ -74,6 +156,63 @@ function normalizeMealHistoryItem(value: unknown): MealHistoryItem | null {
   };
 }
 
+function normalizeGeneratedMealHistory(value: unknown): GeneratedMealHistoryStorage {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== GENERATED_MEAL_HISTORY_SCHEMA_VERSION ||
+    !Array.isArray(value.items)
+  ) {
+    return { schemaVersion: GENERATED_MEAL_HISTORY_SCHEMA_VERSION, items: [] };
+  }
+
+  return {
+    schemaVersion: GENERATED_MEAL_HISTORY_SCHEMA_VERSION,
+    items: value.items
+      .map(normalizeGeneratedMealHistoryItem)
+      .filter((item): item is GeneratedMealHistoryItem => item !== null)
+      .slice(0, GENERATED_MEAL_HISTORY_LIMIT),
+  };
+}
+
+function normalizeGeneratedMealHistoryItem(value: unknown): GeneratedMealHistoryItem | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.id !== 'string' || typeof value.createdAt !== 'string') return null;
+  if (value.mode !== 'single' && value.mode !== 'multi') return null;
+  if (!isRecord(value.target) || !isRecord(value.total)) return null;
+  const meals = Array.isArray(value.meals) ? (value.meals as MealCandidate[]) : [];
+  const mealTitles = Array.isArray(value.mealTitles)
+    ? value.mealTitles.filter((title): title is string => typeof title === 'string')
+    : meals.map((meal) => meal.title).filter(Boolean);
+
+  return {
+    id: value.id,
+    createdAt: value.createdAt,
+    mode: value.mode,
+    multiMealPeriod: normalizeMultiMealPeriod(value.multiMealPeriod),
+    condition: typeof value.condition === 'string' ? value.condition : '',
+    target: value.target as unknown as MealInput,
+    total: normalizeMacroProfile(value.total),
+    title: typeof value.title === 'string' ? value.title : mealTitles.slice(0, 3).join('、') || '献立',
+    mealTitles,
+    meals,
+    dailyPlan: isRecord(value.dailyPlan) ? (value.dailyPlan as unknown as DailyMealPlan) : undefined,
+  };
+}
+
+function normalizeMacroProfile(value: Record<string, unknown>) {
+  return {
+    kcal: numberOrZero(value.kcal),
+    protein: numberOrZero(value.protein),
+    fat: numberOrZero(value.fat),
+    carb: numberOrZero(value.carb),
+  };
+}
+
+function normalizeMultiMealPeriod(value: unknown): MultiMealPeriod | undefined {
+  if (value === 'day' || value === 'threeDays' || value === 'week') return value;
+  return undefined;
+}
+
 function normalizeHistoryMacros(value: unknown): MealHistoryItem['macros'] {
   if (!isRecord(value)) return undefined;
   const kcal = Number(value.kcal);
@@ -96,6 +235,15 @@ function roundOne(value: number) {
   return Math.round(value * 10) / 10;
 }
 
+function numberOrZero(value: unknown) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
 function createHistoryId(index: number) {
   return `meal-history-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createGeneratedHistoryId() {
+  return `generated-meal-history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }

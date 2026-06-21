@@ -28,6 +28,8 @@ export type RecipeCategory =
 export type RecipeMealStyle = 'setMeal' | 'oneDish' | 'bowl' | 'noodle' | 'pasta' | 'curry';
 
 export type MealTiming = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type MealPlanMode = 'single' | 'multi';
+export type MultiMealPeriod = 'day' | 'threeDays' | 'week';
 
 export type ConditionTag =
   | 'white-rice'
@@ -178,4 +180,23 @@ export interface MealHistoryItem {
 export interface MealHistoryStorage {
   schemaVersion: 1;
   items: MealHistoryItem[];
+}
+
+export interface GeneratedMealHistoryItem {
+  id: string;
+  createdAt: string;
+  mode: MealPlanMode;
+  multiMealPeriod?: MultiMealPeriod;
+  condition: string;
+  target: MealInput;
+  total: MacroProfile;
+  title: string;
+  mealTitles: string[];
+  meals: MealCandidate[];
+  dailyPlan?: DailyMealPlan;
+}
+
+export interface GeneratedMealHistoryStorage {
+  schemaVersion: 1;
+  items: GeneratedMealHistoryItem[];
 }

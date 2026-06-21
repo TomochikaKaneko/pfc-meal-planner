@@ -1,15 +1,25 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BookOpen, ChefHat, CircleHelp, Home, Plus, RefreshCw, Save, ShoppingCart, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, ChefHat, CircleHelp, History, Home, Plus, RefreshCw, Save, ShoppingCart, Sparkles, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
 import { storageKeys } from './storage/storageKeys';
-import { appendMealHistory, loadMealHistory, readStorageJson, writeStorageJson } from './storage/storageService';
+import {
+  appendGeneratedMealHistory,
+  appendMealHistory,
+  clearGeneratedMealHistory,
+  deleteGeneratedMealHistoryItem,
+  loadGeneratedMealHistory,
+  loadMealHistory,
+  readStorageJson,
+  writeStorageJson,
+} from './storage/storageService';
 import type {
   ConditionTag,
   DailyMealPlan,
   Food,
   FoodCategory,
+  GeneratedMealHistoryItem,
   MacroDiffProfile,
   MacroKey,
   MacroProfile,
@@ -17,7 +27,9 @@ import type {
   MacroTargetMode,
   MealCandidate,
   MealInput,
+  MealPlanMode,
   MealTiming,
+  MultiMealPeriod,
   PlannedMealSlot,
 } from './types';
 
@@ -136,9 +148,7 @@ const emptyFoodForm = {
   tags: '',
 };
 
-type Tab = 'home' | 'results' | 'foods' | 'shopping' | 'guide';
-type MealPlanMode = 'single' | 'multi';
-type MultiMealPeriod = 'day' | 'threeDays' | 'week';
+type Tab = 'home' | 'results' | 'foods' | 'shopping' | 'history' | 'guide';
 
 interface ShoppingListItem {
   name: string;
@@ -158,6 +168,7 @@ export function App() {
   const [foodCategoryFilter, setFoodCategoryFilter] = useState<FoodCategory | 'all'>('all');
   const [results, setResults] = useState<MealCandidate[]>([]);
   const [dailyPlan, setDailyPlan] = useState<DailyMealPlan | null>(null);
+  const [generatedHistoryItems, setGeneratedHistoryItems] = useState<GeneratedMealHistoryItem[]>(() => loadGeneratedMealHistory().items);
   const [hasGeneratedResults, setHasGeneratedResults] = useState(false);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
   const [updateReady, setUpdateReady] = useState(false);
@@ -175,6 +186,7 @@ export function App() {
   const [isTagSelectorOpen, setIsTagSelectorOpen] = useState(false);
   const [draftTags, setDraftTags] = useState<ConditionTag[]>([]);
   const [selectedMeal, setSelectedMeal] = useState<MealCandidate | null>(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<GeneratedMealHistoryItem | null>(null);
   const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
   const isPlanning = planningSource !== null;
@@ -283,6 +295,16 @@ export function App() {
       setDailyPlan(plan);
       setResults([]);
       appendMealHistory(plan.slots.flatMap((slot) => (slot.meal ? [slot.meal] : [])), 'suggestion');
+      setGeneratedHistoryItems(
+        appendGeneratedMealHistory({
+          mode,
+          multiMealPeriod: period,
+          target: safeInput,
+          condition,
+          meals: plan.slots.flatMap((slot) => (slot.meal ? [slot.meal] : [])),
+          dailyPlan: plan,
+        }).items,
+      );
       setHasGeneratedResults(true);
       setSelectedMeal(null);
       setShouldScrollToResults(true);
@@ -297,6 +319,15 @@ export function App() {
     setDailyPlan(null);
     setResults(candidates);
     appendMealHistory(candidates, 'suggestion');
+    setGeneratedHistoryItems(
+      appendGeneratedMealHistory({
+        mode,
+        multiMealPeriod: period,
+        target: safeInput,
+        condition,
+        meals: candidates,
+      }).items,
+    );
     setHasGeneratedResults(true);
     setSelectedMeal(null);
     setShouldScrollToResults(true);
@@ -460,6 +491,45 @@ export function App() {
   function clearShoppingList() {
     if (!window.confirm('買い物リストをすべてクリアしますか？')) return;
     updateShoppingList([]);
+  }
+
+  function redisplayHistoryItem(item: GeneratedMealHistoryItem) {
+    setDailyPlan(item.dailyPlan ?? null);
+    setResults(item.dailyPlan ? [] : item.meals);
+    setMealPlanMode(item.mode);
+    setMultiMealPeriod(item.multiMealPeriod ?? 'day');
+    setMealInput(item.target);
+    setFreeCondition(item.condition);
+    writeStorageJson(LAST_INPUT_KEY, item.target);
+    writeStorageJson(FREE_CONDITION_KEY, item.condition);
+    setHasGeneratedResults(true);
+    setSelectedHistoryItem(null);
+    setSelectedMeal(null);
+    setShouldScrollToResults(true);
+    setTab('results');
+  }
+
+  function replanFromHistoryItem(item: GeneratedMealHistoryItem) {
+    setMealInput(item.target);
+    setMealPlanMode(item.mode);
+    setMultiMealPeriod(item.multiMealPeriod ?? 'day');
+    setFreeCondition(item.condition);
+    writeStorageJson(LAST_INPUT_KEY, item.target);
+    writeStorageJson(FREE_CONDITION_KEY, item.condition);
+    setSelectedHistoryItem(null);
+    startMealGeneration(item.target, item.condition, 'replan', item.mode, item.multiMealPeriod ?? 'day');
+  }
+
+  function deleteHistoryItem(id: string) {
+    if (!window.confirm('この履歴を削除しますか？')) return;
+    setGeneratedHistoryItems(deleteGeneratedMealHistoryItem(id).items);
+    setSelectedHistoryItem(null);
+  }
+
+  function clearHistoryItems() {
+    if (!window.confirm('履歴をすべて削除しますか？')) return;
+    setGeneratedHistoryItems(clearGeneratedMealHistory().items);
+    setSelectedHistoryItem(null);
   }
 
   return (
@@ -760,6 +830,14 @@ export function App() {
           />
         )}
 
+        {tab === 'history' && (
+          <MealHistoryScreen
+            items={generatedHistoryItems}
+            onOpen={setSelectedHistoryItem}
+            onClear={clearHistoryItems}
+          />
+        )}
+
         {tab === 'guide' && (
           <section className="stack">
             <div className="section-title">
@@ -842,11 +920,22 @@ export function App() {
 
       {selectedMeal && <MealDetailModal meal={selectedMeal} onAddShoppingList={addMealToShoppingList} onClose={() => setSelectedMeal(null)} />}
 
+      {selectedHistoryItem && (
+        <HistoryDetailModal
+          item={selectedHistoryItem}
+          onClose={() => setSelectedHistoryItem(null)}
+          onRedisplay={redisplayHistoryItem}
+          onReplan={replanFromHistoryItem}
+          onDelete={deleteHistoryItem}
+        />
+      )}
+
       <nav className="bottom-nav" aria-label="主要ナビゲーション">
         <NavButton active={tab === 'home'} icon={<Home size={20} />} label="ホーム" onClick={() => setTab('home')} />
         <NavButton active={tab === 'results'} icon={<ChefHat size={20} />} label="結果" onClick={() => setTab('results')} />
         <NavButton active={tab === 'foods'} icon={<BookOpen size={20} />} label="食品" onClick={() => setTab('foods')} />
         <NavButton active={tab === 'shopping'} icon={<ShoppingCart size={20} />} label="買い物" onClick={() => setTab('shopping')} />
+        <NavButton active={tab === 'history'} icon={<History size={20} />} label="履歴" onClick={() => setTab('history')} />
         <NavButton active={tab === 'guide'} icon={<CircleHelp size={20} />} label="使い方" onClick={() => setTab('guide')} />
       </nav>
       {isTagSelectorOpen && (
@@ -1483,6 +1572,172 @@ function ShoppingListScreen({
   );
 }
 
+function MealHistoryScreen({
+  items,
+  onOpen,
+  onClear,
+}: {
+  items: GeneratedMealHistoryItem[];
+  onOpen: (item: GeneratedMealHistoryItem) => void;
+  onClear: () => void;
+}) {
+  return (
+    <section className="stack history-screen">
+      <div className="section-title">
+        <h2>履歴</h2>
+        <span>{items.length}件</span>
+      </div>
+
+      {items.length > 0 && (
+        <button className="secondary-action danger-action" type="button" onClick={onClear}>
+          履歴を全削除
+        </button>
+      )}
+
+      {items.length === 0 ? (
+        <div className="empty-state">
+          <History size={36} />
+          <p>履歴はまだありません。献立を提案するとここに保存されます。</p>
+        </div>
+      ) : (
+        <div className="history-list">
+          {items.map((item) => (
+            <button className="history-card" type="button" key={item.id} onClick={() => onOpen(item)}>
+              <span className="history-date">{formatHistoryDate(item.createdAt)}</span>
+              <strong>{historyModeLabel(item)}</strong>
+              <span className="history-kcal">{Math.round(item.total.kcal)}kcal</span>
+              <span className="history-macros">
+                P{roundMacro(item.total.protein)} F{roundMacro(item.total.fat)} C{roundMacro(item.total.carb)}
+              </span>
+              <span className="history-title">{formatHistoryTitles(item.mealTitles)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HistoryDetailModal({
+  item,
+  onClose,
+  onRedisplay,
+  onReplan,
+  onDelete,
+}: {
+  item: GeneratedMealHistoryItem;
+  onClose: () => void;
+  onRedisplay: (item: GeneratedMealHistoryItem) => void;
+  onReplan: (item: GeneratedMealHistoryItem) => void;
+  onDelete: (id: string) => void;
+}) {
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  return (
+    <div className="modal-backdrop detail-backdrop" onClick={onClose}>
+      <section className="meal-detail-sheet" role="dialog" aria-modal="true" aria-labelledby="history-detail-title" onClick={(event) => event.stopPropagation()}>
+        <header className="meal-detail-header">
+          <div>
+            <p className="eyebrow">{formatHistoryDate(item.createdAt)}</p>
+            <h2 id="history-detail-title">{historyModeLabel(item)}</h2>
+          </div>
+          <button className="detail-close-button" type="button" onClick={onClose} aria-label="履歴詳細を閉じる">
+            ×
+          </button>
+        </header>
+
+        <div className="meal-detail-body">
+          <section className="detail-section">
+            <h3>合計</h3>
+            <div className="detail-macro-grid">
+              {macroFields.map((field) => (
+                <div key={`history-total-${field.key}`}>
+                  <span>{field.unit}</span>
+                  <strong>{item.total[field.key]}{field.key === 'kcal' ? '' : 'g'}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="detail-section">
+            <h3>目標との差分</h3>
+            <div className="daily-total-grid">
+              {macroFields.map((field) => (
+                <MacroSummaryCell
+                  key={`history-diff-${field.key}`}
+                  field={field}
+                  totals={item.total}
+                  diff={diffMacroProfiles(item.total, item.target)}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="detail-section">
+            <h3>献立</h3>
+            {item.dailyPlan ? (
+              <div className="history-slot-list">
+                {item.dailyPlan.slots.map((slot) => (
+                  <article className="history-slot" key={`${item.id}-${slot.id}`}>
+                    <span>{slot.label}</span>
+                    <strong>{slot.meal?.title ?? '間食なし'}</strong>
+                    {slot.meal && (
+                      <small>
+                        {slot.meal.totals.kcal}kcal P{slot.meal.totals.protein} F{slot.meal.totals.fat} C{slot.meal.totals.carb}
+                      </small>
+                    )}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="history-slot-list">
+                {item.meals.map((meal, index) => (
+                  <article className="history-slot" key={`${item.id}-${meal.id}`}>
+                    <span>候補{index + 1}</span>
+                    <strong>{meal.title}</strong>
+                    <small>
+                      {meal.totals.kcal}kcal P{meal.totals.protein} F{meal.totals.fat} C{meal.totals.carb}
+                    </small>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="detail-section history-actions">
+            <button className="primary-action compact-action" type="button" onClick={() => onRedisplay(item)}>
+              この献立を再表示
+            </button>
+            <button className="secondary-action" type="button" onClick={() => onReplan(item)}>
+              この条件で再提案
+            </button>
+            <button className="secondary-action danger-action" type="button" onClick={() => onDelete(item.id)}>
+              削除
+            </button>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function MealDetailModal({
   meal,
   onAddShoppingList,
@@ -1659,6 +1914,31 @@ function getMealRecipeUrl(meal: MealCandidate) {
   if (recipeUrl) return recipeUrl;
   const recipeName = primaryItem?.recipe.name ?? meal.title;
   return `https://www.google.com/search?q=${encodeURIComponent(`${recipeName} レシピ`)}`;
+}
+
+function formatHistoryDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function historyModeLabel(item: GeneratedMealHistoryItem) {
+  if (item.mode === 'single') return '1食献立';
+  if (item.multiMealPeriod === 'threeDays') return '複数食献立（3日）';
+  if (item.multiMealPeriod === 'week') return '複数食献立（1週間）';
+  return '複数食献立（1日）';
+}
+
+function formatHistoryTitles(titles: string[]) {
+  if (titles.length === 0) return '献立';
+  const visibleTitles = titles.slice(0, 3).join('、');
+  return titles.length > 3 ? `${visibleTitles}…` : visibleTitles;
 }
 
 function MacroResult({ field, meal }: { field: (typeof macroFields)[number]; meal: MealCandidate }) {

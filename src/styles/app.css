@@ -1765,6 +1765,61 @@ button {
   line-height: 1.6;
 }
 
+.history-list,
+.history-slot-list,
+.history-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.history-card {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  border: 1px solid rgba(47, 125, 104, 0.14);
+  border-radius: 8px;
+  padding: 14px;
+  color: #21302c;
+  background: #ffffff;
+  text-align: left;
+}
+
+.history-date,
+.history-macros,
+.history-title,
+.history-slot small {
+  color: #64776f;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.history-kcal {
+  color: #2f7d68;
+  font-size: 1.12rem;
+  font-weight: 900;
+}
+
+.history-slot {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(47, 125, 104, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fbf8;
+}
+
+.history-slot span {
+  color: #2f7d68;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.danger-action {
+  color: #9a3d2b;
+  border-color: rgba(186, 78, 57, 0.24);
+  background: #fff0eb;
+}
+
 .error-screen {
   display: grid;
   gap: 14px;
@@ -1785,7 +1840,7 @@ button {
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   width: min(100%, 430px);
   margin: 0 auto;

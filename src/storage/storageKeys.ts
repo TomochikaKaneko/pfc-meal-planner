@@ -5,4 +5,5 @@ export const storageKeys = {
   excludedFoodIds: 'pfcMealPlanner.excludedFoodIds',
   shoppingList: 'pfcMealPlanner.shoppingList',
   mealHistory: 'pfcMealPlanner.mealHistory',
+  generatedMealHistory: 'pfcMealPlanner.generatedMealHistory',
 } as const;
