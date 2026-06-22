@@ -2094,6 +2094,7 @@ function dailyPlanCombinationScore(input: MealInput, slots: PlannedMealSlot[]) {
     if (!slot.meal) continue;
     score -= dailyMainMealMacroPenalty(slot.meal, slot.timing) * 3.2;
   }
+  score += dailyCarbCalorieShortageAdjustment(input, mainSlots, totals);
   score -= dailyMainTotalOverreachPenalty(input, mainSlots);
   score -= dailyMealDuplicatePenalty(meals);
   score += meals.reduce((total, meal) => total + meal.mealNaturalnessScore * 1.2 + meal.mealSatisfactionScore * 0.8, 0);
@@ -2113,6 +2114,74 @@ function dailyMacroBalanceScore(totals: MacroProfile, input: MealInput) {
     const ratioError = Math.abs(totals[target.key] - value) / value;
     return score - Math.pow(ratioError / target.tolerance, 2) * target.weight;
   }, 12000);
+}
+
+function dailyCarbCalorieShortageAdjustment(input: MealInput, mainSlots: PlannedMealSlot[], totals: MacroProfile) {
+  if (
+    input.kcal === null ||
+    input.kcal <= 0 ||
+    input.carb === null ||
+    input.carb <= 0 ||
+    input.protein === null ||
+    input.protein <= 0 ||
+    input.calorieMode === 'maximum' ||
+    input.carbMode === 'maximum'
+  ) {
+    return 0;
+  }
+
+  const proteinRatio = totals.protein / input.protein;
+  const carbRatio = totals.carb / input.carb;
+  const kcalRatio = totals.kcal / input.kcal;
+  const proteinIsCovered = proteinRatio >= 0.9;
+  const carbIsShort = carbRatio < 0.85;
+  const kcalIsShort = kcalRatio < 0.9;
+  if (!proteinIsCovered || !carbIsShort || !kcalIsShort) return 0;
+
+  const carbShortagePressure = clampNumber((0.85 - carbRatio) / 0.2, 0, 1.5);
+  const kcalShortagePressure = clampNumber((0.9 - kcalRatio) / 0.15, 0, 1.5);
+  const pressure = Math.max(0.5, (carbShortagePressure + kcalShortagePressure) / 2);
+  const stapleStats = dailyMainStapleStats(mainSlots);
+
+  let score = 0;
+  score += Math.min(stapleStats.carb, 190) * 18 * pressure;
+  score += Math.min(stapleStats.kcal, 900) * 2.2 * pressure;
+  score += stapleStats.whiteRiceServings.reduce((bonus, serving) => {
+    if (serving >= 170) return bonus + 760 * pressure;
+    if (serving >= 150) return bonus + 520 * pressure;
+    if (serving <= 110) return bonus - 980 * pressure;
+    if (serving < 140) return bonus - 360 * pressure;
+    return bonus;
+  }, 0);
+
+  if (stapleStats.carb < input.carb * 0.45) {
+    score -= (input.carb * 0.45 - stapleStats.carb) * 24 * pressure;
+  }
+  if (proteinRatio > 1.12) {
+    score -= (proteinRatio - 1.12) * 1800;
+  }
+  if (input.fat !== null && input.fat > 0 && totals.fat > input.fat * 1.12) {
+    score -= (totals.fat / input.fat - 1.12) * 4200;
+  }
+  return score;
+}
+
+function dailyMainStapleStats(mainSlots: PlannedMealSlot[]) {
+  const stats = { kcal: 0, carb: 0, whiteRiceServings: [] as number[] };
+  for (const slot of mainSlots) {
+    if (!slot.meal) continue;
+    for (const ingredient of slot.meal.items.flatMap((item) => item.ingredients)) {
+      if (ingredient.food.category !== 'staple') continue;
+      stats.kcal += ingredient.macros.kcal;
+      stats.carb += ingredient.macros.carb;
+      if (ingredient.food.id === 'white-rice') stats.whiteRiceServings.push(ingredient.serving);
+    }
+  }
+  return stats;
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function dailyMainTotalOverreachPenalty(input: MealInput, mainSlots: PlannedMealSlot[]) {
