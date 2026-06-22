@@ -387,7 +387,7 @@ export function App() {
         .slice(0, DAILY_SLOT_CANDIDATE_LIMIT);
       return { slot, candidates: rankedCandidates.length > 0 ? rankedCandidates : [null] };
     });
-    const plannedSlots = selectDailyMealSlots(input, slotPools, foods, excludedFoodIds);
+    const plannedSlots = selectDailyMealSlots(input, slotPools, foods, excludedFoodIds, freeTerms);
 
     const totals = sumMacroProfiles(plannedSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
     return {
@@ -2052,10 +2052,12 @@ function selectDailyMealSlots(
   slotPools: DailySlotCandidatePool[],
   foods: Food[],
   excludedFoodIds: string[],
+  freeTerms: string[] = [],
 ) {
   let bestSlots: PlannedMealSlot[] | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
   const [breakfastPool, lunchPool, dinnerPool] = slotPools;
+  const directTerms = dailyDirectMatchTerms(freeTerms, slotPools);
 
   for (const breakfast of breakfastPool.candidates) {
     for (const lunch of lunchPool.candidates) {
@@ -2068,7 +2070,7 @@ function selectDailyMealSlots(
         const mainTotals = sumMacroProfiles(mainSlots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
         const snack = createSnackCandidate(input, mainTotals, foods, excludedFoodIds);
         const slots = [...mainSlots, { id: 'snack', label: '間食', timing: 'snack' as MealTiming, meal: snack }];
-        const score = dailyPlanCombinationScore(input, slots);
+        const score = dailyPlanCombinationScore(input, slots, directTerms);
         if (score > bestScore) {
           bestScore = score;
           bestSlots = slots;
@@ -2085,7 +2087,7 @@ function selectDailyMealSlots(
   ];
 }
 
-function dailyPlanCombinationScore(input: MealInput, slots: PlannedMealSlot[]) {
+function dailyPlanCombinationScore(input: MealInput, slots: PlannedMealSlot[], directTerms: string[] = []) {
   const totals = sumMacroProfiles(slots.flatMap((slot) => (slot.meal ? [slot.meal.totals] : [])));
   const mainSlots = slots.filter((slot) => slot.timing !== 'snack');
   const meals = slots.flatMap((slot) => (slot.meal ? [slot.meal] : []));
@@ -2096,6 +2098,7 @@ function dailyPlanCombinationScore(input: MealInput, slots: PlannedMealSlot[]) {
   }
   score += dailyCarbCalorieShortageAdjustment(input, mainSlots, totals);
   score -= dailyMainTotalOverreachPenalty(input, mainSlots);
+  score += dailyDirectFreewordMatchScore(mainSlots, directTerms);
   score -= dailyMealDuplicatePenalty(meals);
   score += meals.reduce((total, meal) => total + meal.mealNaturalnessScore * 1.2 + meal.mealSatisfactionScore * 0.8, 0);
   return score;
@@ -2114,6 +2117,37 @@ function dailyMacroBalanceScore(totals: MacroProfile, input: MealInput) {
     const ratioError = Math.abs(totals[target.key] - value) / value;
     return score - Math.pow(ratioError / target.tolerance, 2) * target.weight;
   }, 12000);
+}
+
+function dailyDirectMatchTerms(freeTerms: string[], slotPools: DailySlotCandidatePool[]) {
+  const normalizedTerms = freeTerms.map(normalizeDailyFreewordMatchText).filter((term) => term.length >= 2);
+  if (normalizedTerms.length === 0) return [];
+  const candidates = slotPools.flatMap((pool) => pool.candidates).filter((candidate): candidate is MealCandidate => Boolean(candidate));
+  return normalizedTerms.filter((term) => candidates.some((candidate) => dailyMealDirectNameMatches(candidate, term)));
+}
+
+function dailyDirectFreewordMatchScore(mainSlots: PlannedMealSlot[], directTerms: string[]) {
+  if (directTerms.length === 0) return 0;
+  const meals = mainSlots.flatMap((slot) => (slot.meal ? [slot.meal] : []));
+  const matchedCount = directTerms.filter((term) => meals.some((meal) => dailyMealDirectNameMatches(meal, term))).length;
+  if (matchedCount === 0) return -4200;
+  return matchedCount * 3600;
+}
+
+function dailyMealDirectNameMatches(meal: MealCandidate, term: string) {
+  return dailyMealNameTexts(meal).some((name) => name.includes(term));
+}
+
+function dailyMealNameTexts(meal: MealCandidate) {
+  return [meal.title, ...meal.items.map((item) => item.recipe.name)].map(normalizeDailyFreewordMatchText);
+}
+
+function normalizeDailyFreewordMatchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[ァ-ン]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60))
+    .replace(/[ｰー−]/g, 'ー')
+    .replace(/\s+/g, '');
 }
 
 function dailyCarbCalorieShortageAdjustment(input: MealInput, mainSlots: PlannedMealSlot[], totals: MacroProfile) {

@@ -32,6 +32,7 @@ type MealTemplate = {
 type FreeTextIntent = {
   tags: string[];
   includeTerms: string[];
+  directTerms: string[];
   penaltyTerms: string[];
   moods: string[];
 };
@@ -1080,9 +1081,14 @@ function buildFreeTextIntent(terms: string[]): FreeTextIntent {
   return {
     tags: unique(matchedRules.flatMap((rule) => rule.tags)),
     includeTerms: unique([...normalizedTerms, ...matchedRules.flatMap((rule) => rule.includeTerms.map(normalizeIntentText))]),
+    directTerms: unique(normalizedTerms.filter(isDirectFreeTextTerm)),
     penaltyTerms: unique(matchedRules.flatMap((rule) => (rule.penaltyTerms ?? []).map(normalizeIntentText))),
     moods: unique(matchedRules.map((rule) => rule.mood)),
   };
+}
+
+function isDirectFreeTextTerm(term: string) {
+  return term.length >= 2 && !['breakfast', 'lunch', 'dinner', 'snack'].includes(term);
 }
 
 function scoreRecipeIntent(recipe: Recipe, foodMap: Map<string, Food>, intent: FreeTextIntent) {
@@ -1090,9 +1096,10 @@ function scoreRecipeIntent(recipe: Recipe, foodMap: Map<string, Food>, intent: F
   const searchText = recipeSearchText(recipe, foodMap);
   const tagScore = intent.tags.filter((tag) => recipe.tags.includes(tag)).length * 150;
   const includeScore = intent.includeTerms.filter((term) => searchText.includes(term)).length * 70;
+  const directNameScore = scoreDirectNameMatch([recipe.name], intent) * 1.4;
   const penalty = intent.penaltyTerms.filter((term) => searchText.includes(term)).length * 180;
   const categoryPenalty = intent.moods.includes('hearty') && ['dairy', 'fruit', 'drink', 'snack', 'supplement'].includes(recipe.category) ? 260 : 0;
-  return tagScore + includeScore - penalty - categoryPenalty;
+  return tagScore + includeScore + directNameScore - penalty - categoryPenalty;
 }
 
 function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTextIntent) {
@@ -1105,6 +1112,7 @@ function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTe
   );
   const tagScore = intent.tags.filter((tag) => tags.includes(tag)).length * 85;
   const includeScore = intent.includeTerms.filter((term) => searchText.includes(term)).length * 45;
+  const directNameScore = scoreDirectMealNameMatch(items, intent);
   const penalty = intent.penaltyTerms.filter((term) => searchText.includes(term)).length * 260;
   const heartyBonus = intent.moods.includes('hearty')
     ? (hasRole(items, '主食') ? 110 : -220) +
@@ -1124,7 +1132,25 @@ function scoreMealIntent(items: MealItem[], totals: MacroProfile, intent: FreeTe
   const meatBonus = intent.moods.includes('meat') && tags.some((tag) => ['chicken', 'pork', 'beef'].includes(tag)) ? 180 : 0;
   const lightBonus = intent.moods.includes('light') ? Math.max(0, 120 - totals.fat * 5) : 0;
 
-  return tagScore + includeScore + heartyBonus + meatBonus + lightBonus - penalty + pastaGate + breadGate + yakisobaGate + koreanGate + chineseGate + ethnicGate + meatGate;
+  return tagScore + includeScore + directNameScore + heartyBonus + meatBonus + lightBonus - penalty + pastaGate + breadGate + yakisobaGate + koreanGate + chineseGate + ethnicGate + meatGate;
+}
+
+function scoreDirectMealNameMatch(items: MealItem[], intent: FreeTextIntent) {
+  const primary = getPrimaryMealItemFromItems(items);
+  const primaryScore = primary ? scoreDirectNameMatch([primary.recipe.name], intent) * 1.6 : 0;
+  const itemScore = scoreDirectNameMatch(items.map((item) => item.recipe.name), intent);
+  return Math.max(primaryScore, itemScore);
+}
+
+function scoreDirectNameMatch(names: string[], intent: FreeTextIntent) {
+  if (intent.directTerms.length === 0) return 0;
+  const normalizedNames = names.map(normalizeIntentText);
+  return intent.directTerms.reduce((score, term) => {
+    const exact = normalizedNames.some((name) => name === term);
+    if (exact) return score + 2600;
+    const partial = normalizedNames.some((name) => name.includes(term));
+    return partial ? score + 2100 : score;
+  }, 0);
 }
 
 type KeywordIntentContext = {
@@ -1673,8 +1699,9 @@ function candidateIntentRank(candidate: MealCandidate, intent: FreeTextIntent) {
   const searchText = candidateSearchText(candidate);
   const tagScore = intent.tags.filter((tag) => tags.includes(tag)).length * 70;
   const includeScore = intent.includeTerms.filter((term) => searchText.includes(term)).length * 35;
+  const directNameScore = scoreDirectMealNameMatch(candidate.items, intent) * 0.85;
   const penalty = intent.penaltyTerms.filter((term) => searchText.includes(term)).length * 220;
-  return tagScore + includeScore - penalty;
+  return tagScore + includeScore + directNameScore - penalty;
 }
 
 function candidateKeywordIntentRank(candidate: MealCandidate, intent: FreeTextIntent) {
