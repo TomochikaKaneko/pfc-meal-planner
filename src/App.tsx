@@ -2032,7 +2032,7 @@ function mealPlanModeHeading(mode: MealPlanMode, _period: MultiMealPeriod) {
 }
 
 function mealPlanModeDescription(mode: MealPlanMode, _period: MultiMealPeriod) {
-  if (mode === 'single') return '今日の残りや、この1食で摂りたい kcal / P / F / C を入力してください。';
+  if (mode === 'single') return 'この食事で摂りたい kcal / P / F / C を入力してください。';
   return '選択した期間に応じて、1日あたりの目安をもとに献立を作成します。';
 }
 
@@ -2130,11 +2130,15 @@ function dailyMainTotalOverreachPenalty(input: MealInput, mainSlots: PlannedMeal
 function dailyMealDuplicatePenalty(meals: MealCandidate[]) {
   let penalty = 0;
   const mealKeys = new Set<string>();
+  const dishNames = new Set<string>();
   const proteinKeys = new Set<string>();
   const styleKeys = new Set<string>();
   for (const meal of meals) {
     if (mealKeys.has(meal.mealKey)) penalty += 900;
     mealKeys.add(meal.mealKey);
+    const dishName = normalizeDailyDishName(meal.title);
+    if (dishName && dishNames.has(dishName)) penalty += 100000;
+    if (dishName) dishNames.add(dishName);
     const proteinKey = planProteinSourceKey(meal);
     if (proteinKey && proteinKeys.has(proteinKey)) penalty += 120;
     if (proteinKey) proteinKeys.add(proteinKey);
@@ -2143,6 +2147,10 @@ function dailyMealDuplicatePenalty(meals: MealCandidate[]) {
     if (styleKey) styleKeys.add(styleKey);
   }
   return penalty;
+}
+
+function normalizeDailyDishName(value: string) {
+  return value.replace(/\s/g, '');
 }
 
 function scaleMealInputForSlot(input: MealInput, ratio: number, timing: MealTiming): MealInput {
