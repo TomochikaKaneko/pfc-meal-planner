@@ -28,6 +28,7 @@ import type {
   MealCandidate,
   MealIngredient,
   MealInput,
+  MealItem,
   MealPlanMode,
   MealTiming,
   MultiMealPeriod,
@@ -1973,14 +1974,102 @@ function buildShoppingListItemsFromDailyPlan(plan: DailyMealPlan) {
 }
 
 function buildShoppingListItemsFromMeals(meals: MealCandidate[]) {
-  return mergeShoppingListItems([], meals.flatMap((meal) => meal.items.flatMap((item) => item.ingredients.map(ingredientToShoppingListItem))));
+  return mergeShoppingListItems([], meals.flatMap((meal) => meal.items.flatMap(expandMealItemToShoppingItems)));
+}
+
+function expandMealItemToShoppingItems(item: MealItem) {
+  return expandDishToShoppingItems(item) ?? item.ingredients.map(ingredientToShoppingListItem);
+}
+
+function expandDishToShoppingItems(item: MealItem): ShoppingListItem[] | null {
+  const name = item.recipe.name;
+  if (isMisoSoupDish(item)) return expandMisoSoupToShoppingItems(item, name);
+  if (isEggSoupDish(item)) return expandEggSoupToShoppingItems(item, name);
+  if (isVegetableSoupDish(item)) return expandVegetableSoupToShoppingItems(item, name);
+  return null;
+}
+
+function expandMisoSoupToShoppingItems(item: MealItem, dishName: string) {
+  const multiplier = soupServingMultiplier(item, ['miso-soup', 'tofu-miso-soup', 'wakame-miso-soup']);
+  const items = [
+    createShoppingListItem('味噌', 18 * multiplier, 'g'),
+    createShoppingListItem('和風だし', 3 * multiplier, 'g'),
+    ...item.ingredients
+      .filter((ingredient) => !['miso-soup', 'tofu-miso-soup', 'wakame-miso-soup', 'miso'].includes(ingredient.food.id))
+      .map(ingredientToShoppingListItem),
+  ];
+  addInferredSoupIngredient(items, dishName, ['豆腐'], createShoppingListItem('豆腐', 80 * multiplier, 'g'));
+  addInferredSoupIngredient(items, dishName, ['わかめ'], createShoppingListItem('わかめ', 3 * multiplier, 'g'));
+  addInferredSoupIngredient(items, dishName, ['長ねぎ', 'ねぎ'], createShoppingListItem('長ねぎ', 30 * multiplier, 'g'));
+  addInferredSoupIngredient(items, dishName, ['きのこ', 'しめじ', 'えのき'], createShoppingListItem('きのこ', 50 * multiplier, 'g'));
+  return mergeShoppingListItems([], items);
+}
+
+function expandEggSoupToShoppingItems(item: MealItem, dishName: string) {
+  const multiplier = soupServingMultiplier(item, ['egg-soup']);
+  const items = [
+    createShoppingListItem('卵', 1 * multiplier, '個'),
+    createShoppingListItem('鶏ガラスープの素', 3 * multiplier, 'g'),
+    ...item.ingredients
+      .filter((ingredient) => !['egg-soup', 'egg'].includes(ingredient.food.id))
+      .map(ingredientToShoppingListItem),
+  ];
+  addInferredSoupIngredient(items, dishName, ['わかめ'], createShoppingListItem('わかめ', 3 * multiplier, 'g'));
+  addInferredSoupIngredient(items, dishName, ['長ねぎ', 'ねぎ'], createShoppingListItem('長ねぎ', 30 * multiplier, 'g'));
+  return mergeShoppingListItems([], items);
+}
+
+function expandVegetableSoupToShoppingItems(item: MealItem, dishName: string) {
+  const multiplier = soupServingMultiplier(item, ['vegetable-soup']);
+  const items = [
+    createShoppingListItem('コンソメ', 3 * multiplier, 'g'),
+    createShoppingListItem('キャベツ', 50 * multiplier, 'g'),
+    createShoppingListItem('玉ねぎ', 40 * multiplier, 'g'),
+    createShoppingListItem('にんじん', 30 * multiplier, 'g'),
+    ...item.ingredients
+      .filter((ingredient) => !['vegetable-soup', 'consomme', 'cabbage', 'onion', 'carrot'].includes(ingredient.food.id))
+      .map(ingredientToShoppingListItem),
+  ];
+  addInferredSoupIngredient(items, dishName, ['きのこ', 'しめじ', 'えのき'], createShoppingListItem('きのこ', 50 * multiplier, 'g'));
+  addInferredSoupIngredient(items, dishName, ['トマト'], createShoppingListItem('トマト', 80 * multiplier, 'g'));
+  return mergeShoppingListItems([], items);
+}
+
+function isMisoSoupDish(item: MealItem) {
+  return (
+    /味噌汁|みそ汁|味噌スープ/.test(item.recipe.name) ||
+    item.ingredients.some((ingredient) => ['miso-soup', 'tofu-miso-soup', 'wakame-miso-soup'].includes(ingredient.food.id))
+  );
+}
+
+function isEggSoupDish(item: MealItem) {
+  return /たまごスープ|卵スープ/.test(item.recipe.name) || item.ingredients.some((ingredient) => ingredient.food.id === 'egg-soup');
+}
+
+function isVegetableSoupDish(item: MealItem) {
+  return /野菜スープ/.test(item.recipe.name) || item.ingredients.some((ingredient) => ingredient.food.id === 'vegetable-soup');
+}
+
+function soupServingMultiplier(item: MealItem, soupFoodIds: string[]) {
+  const soupServing = item.ingredients.find((ingredient) => soupFoodIds.includes(ingredient.food.id))?.serving;
+  return soupServing && soupServing > 0 ? soupServing : 1;
+}
+
+function addInferredSoupIngredient(items: ShoppingListItem[], dishName: string, keywords: string[], item: ShoppingListItem) {
+  if (!keywords.some((keyword) => dishName.includes(keyword))) return;
+  if (items.some((current) => current.name.includes(item.name) || item.name.includes(current.name))) return;
+  items.push(item);
 }
 
 function ingredientToShoppingListItem(ingredient: MealIngredient): ShoppingListItem {
+  return createShoppingListItem(ingredient.food.name, ingredient.serving, ingredient.food.servingUnit);
+}
+
+function createShoppingListItem(name: string, quantity: number, unit: string): ShoppingListItem {
   return {
-    name: ingredient.food.name,
-    quantity: roundShoppingQuantity(ingredient.serving),
-    unit: ingredient.food.servingUnit,
+    name,
+    quantity: roundShoppingQuantity(quantity),
+    unit,
     checked: false,
   };
 }
