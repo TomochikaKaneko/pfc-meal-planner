@@ -1886,10 +1886,10 @@ function MealDetailModal({
                   <div>
                     <strong>{item.recipe.name}</strong>
                     <ul className="ingredient-list detail-ingredient-list" aria-label={`${item.recipe.name}の材料`}>
-                      {item.ingredients.map((ingredient) => (
-                        <li key={`${item.recipe.id}-detail-${ingredient.food.id}-${ingredient.amount}`}>
-                          <span>{ingredient.food.name}</span>
-                          <span>{ingredient.amount}</span>
+                      {expandMealItemToShoppingItems(item).map((ingredient) => (
+                        <li key={`${item.recipe.id}-detail-${shoppingItemKey(ingredient.name, ingredient.unit)}`}>
+                          <span>{ingredient.name}</span>
+                          <span>{formatShoppingListAmount(ingredient)}</span>
                         </li>
                       ))}
                     </ul>
@@ -1966,7 +1966,7 @@ function MealDetailModal({
 }
 
 function getUniqueIngredientNames(meal: MealCandidate) {
-  return Array.from(new Set(meal.items.flatMap((item) => item.ingredients.map((ingredient) => ingredient.food.name))));
+  return Array.from(new Set(meal.items.flatMap((item) => expandMealItemToShoppingItems(item).map((ingredient) => ingredient.name))));
 }
 
 function buildShoppingListItemsFromDailyPlan(plan: DailyMealPlan) {
