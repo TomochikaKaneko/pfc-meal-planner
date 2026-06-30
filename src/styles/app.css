@@ -1361,6 +1361,14 @@ button {
   font-weight: 850;
 }
 
+.shopping-list label small {
+  margin-left: auto;
+  color: #65796f;
+  font-size: 0.78rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .shopping-list input {
   width: 18px;
   height: 18px;
@@ -1412,6 +1420,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .shopping-list-header span {

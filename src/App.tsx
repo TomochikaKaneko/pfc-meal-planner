@@ -26,6 +26,7 @@ import type {
   MacroTargetProfile,
   MacroTargetMode,
   MealCandidate,
+  MealIngredient,
   MealInput,
   MealPlanMode,
   MealTiming,
@@ -166,6 +167,8 @@ type Tab = 'home' | 'results' | 'foods' | 'shopping' | 'history' | 'guide';
 
 interface ShoppingListItem {
   name: string;
+  quantity: number;
+  unit: string;
   checked: boolean;
 }
 
@@ -179,6 +182,7 @@ export function App() {
   const [userFoods, setUserFoods] = useState<Food[]>(() => loadUserFoods());
   const [excludedFoodIds, setExcludedFoodIds] = useState<string[]>(() => loadExcludedFoodIds());
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => loadShoppingList());
+  const [shoppingListMessage, setShoppingListMessage] = useState('');
   const [foodSearch, setFoodSearch] = useState('');
   const [foodCategoryFilter, setFoodCategoryFilter] = useState<FoodCategory | 'all'>('all');
   const [results, setResults] = useState<MealCandidate[]>([]);
@@ -501,20 +505,29 @@ export function App() {
     writeStorageJson(SHOPPING_LIST_KEY, nextList);
   }
 
-  function addMealToShoppingList(names: string[]) {
-    const existingNames = new Set(shoppingList.map((item) => item.name));
-    const additions = names.filter((name) => !existingNames.has(name)).map((name) => ({ name, checked: false }));
-    if (additions.length === 0) return 0;
-    updateShoppingList([...shoppingList, ...additions]);
-    return additions.length;
+  function addShoppingItems(items: ShoppingListItem[]) {
+    if (items.length === 0) return 0;
+    const merged = mergeShoppingListItems(shoppingList, items);
+    updateShoppingList(merged);
+    return items.length;
   }
 
-  function toggleShoppingItem(name: string) {
-    updateShoppingList(shoppingList.map((item) => (item.name === name ? { ...item, checked: !item.checked } : item)));
+  function addCurrentPlanToShoppingList() {
+    const items = dailyPlan ? buildShoppingListItemsFromDailyPlan(dailyPlan) : buildShoppingListItemsFromMeals(results);
+    const count = addShoppingItems(items);
+    setShoppingListMessage(count > 0 ? `${count}件を買い物リストに反映しました` : '追加できる食材がありません');
   }
 
-  function deleteShoppingItem(name: string) {
-    updateShoppingList(shoppingList.filter((item) => item.name !== name));
+  function toggleShoppingItem(name: string, unit: string) {
+    updateShoppingList(shoppingList.map((item) => (shoppingItemKey(item.name, item.unit) === shoppingItemKey(name, unit) ? { ...item, checked: !item.checked } : item)));
+  }
+
+  function deleteShoppingItem(name: string, unit: string) {
+    updateShoppingList(shoppingList.filter((item) => shoppingItemKey(item.name, item.unit) !== shoppingItemKey(name, unit)));
+  }
+
+  function uncheckShoppingList() {
+    updateShoppingList(shoppingList.map((item) => ({ ...item, checked: false })));
   }
 
   function clearShoppingList() {
@@ -678,6 +691,16 @@ export function App() {
             </button>
 
             <p className="tap-hint">献立をタップすると、材料や買い物リストを確認できます。</p>
+
+            {(dailyPlan || results.length > 0) && (
+              <section className="panel shopping-create-panel">
+                <button className="secondary-action" type="button" onClick={addCurrentPlanToShoppingList}>
+                  <ShoppingCart size={18} />
+                  買い物リストを作成
+                </button>
+                {shoppingListMessage && <p className="shopping-add-note">{shoppingListMessage}</p>}
+              </section>
+            )}
 
             {dailyPlan ? (
               <DailyMealPlanView plan={dailyPlan} onOpenMeal={setSelectedMeal} />
@@ -853,6 +876,7 @@ export function App() {
             items={shoppingList}
             onToggle={toggleShoppingItem}
             onDelete={deleteShoppingItem}
+            onUncheck={uncheckShoppingList}
             onClear={clearShoppingList}
           />
         )}
@@ -945,7 +969,7 @@ export function App() {
         />
       )}
 
-      {selectedMeal && <MealDetailModal meal={selectedMeal} onAddShoppingList={addMealToShoppingList} onClose={() => setSelectedMeal(null)} />}
+      {selectedMeal && <MealDetailModal meal={selectedMeal} onAddShoppingList={addShoppingItems} onClose={() => setSelectedMeal(null)} />}
 
       {selectedHistoryItem && (
         <HistoryDetailModal
@@ -1544,11 +1568,13 @@ function ShoppingListScreen({
   items,
   onToggle,
   onDelete,
+  onUncheck,
   onClear,
 }: {
   items: ShoppingListItem[];
-  onToggle: (name: string) => void;
-  onDelete: (name: string) => void;
+  onToggle: (name: string, unit: string) => void;
+  onDelete: (name: string, unit: string) => void;
+  onUncheck: () => void;
   onClear: () => void;
 }) {
   return (
@@ -1576,18 +1602,22 @@ function ShoppingListScreen({
         <section className="panel shopping-list-panel">
           <div className="shopping-list-header">
             <span>{items.filter((item) => item.checked).length} / {items.length}件チェック済み</span>
+            <button className="text-button" type="button" onClick={onUncheck}>
+              チェック済みを解除
+            </button>
             <button className="text-button danger-text" type="button" onClick={onClear}>
               すべてクリア
             </button>
           </div>
           <ul className="shopping-list saved" aria-label="買い物リスト">
             {items.map((item) => (
-              <li key={item.name} className={item.checked ? 'checked' : ''}>
+              <li key={shoppingItemKey(item.name, item.unit)} className={item.checked ? 'checked' : ''}>
                 <label>
-                  <input type="checkbox" checked={item.checked} onChange={() => onToggle(item.name)} />
+                  <input type="checkbox" checked={item.checked} onChange={() => onToggle(item.name, item.unit)} />
                   <span>{item.name}</span>
+                  <small>{formatShoppingListAmount(item)}</small>
                 </label>
-                <button className="text-button danger-text" type="button" onClick={() => onDelete(item.name)}>
+                <button className="text-button danger-text" type="button" onClick={() => onDelete(item.name, item.unit)}>
                   削除
                 </button>
               </li>
@@ -1771,11 +1801,12 @@ function MealDetailModal({
   onClose,
 }: {
   meal: MealCandidate;
-  onAddShoppingList: (names: string[]) => number;
+  onAddShoppingList: (items: ShoppingListItem[]) => number;
   onClose: () => void;
 }) {
   const ingredientNames = getUniqueIngredientNames(meal);
-  const [selectedIngredientNames, setSelectedIngredientNames] = useState<string[]>([]);
+  const shoppingIngredients = buildShoppingListItemsFromMeals([meal]);
+  const [selectedIngredientKeys, setSelectedIngredientKeys] = useState<string[]>([]);
   const [addMessage, setAddMessage] = useState('');
   const recipeUrl = getMealRecipeUrl(meal);
 
@@ -1798,9 +1829,9 @@ function MealDetailModal({
     };
   }, []);
 
-  function toggleDetailIngredient(name: string) {
+  function toggleDetailIngredient(key: string) {
     setAddMessage('');
-    setSelectedIngredientNames((current) => (current.includes(name) ? current.filter((item) => item !== name) : [...current, name]));
+    setSelectedIngredientKeys((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   }
 
   return (
@@ -1882,12 +1913,13 @@ function MealDetailModal({
               className="primary-action compact-action"
               type="button"
               onClick={() => {
-                if (selectedIngredientNames.length === 0) {
+                if (selectedIngredientKeys.length === 0) {
                   setAddMessage('追加する食材を選択してください');
                   return;
                 }
-                const addedCount = onAddShoppingList(selectedIngredientNames);
-                setAddMessage(addedCount > 0 ? `${addedCount}件追加しました` : 'すでに追加済みです');
+                const selectedItems = shoppingIngredients.filter((item) => selectedIngredientKeys.includes(shoppingItemKey(item.name, item.unit)));
+                const addedCount = onAddShoppingList(selectedItems);
+                setAddMessage(addedCount > 0 ? `${addedCount}件を買い物リストに反映しました` : 'すでに追加済みです');
               }}
             >
               <ShoppingCart size={18} />
@@ -1895,14 +1927,18 @@ function MealDetailModal({
             </button>
             {addMessage && <p className="shopping-add-note">{addMessage}</p>}
             <ul className="shopping-list" aria-label="買い物リスト">
-              {ingredientNames.map((name) => (
-                <li key={`shopping-${name}`}>
+              {shoppingIngredients.map((item) => {
+                const key = shoppingItemKey(item.name, item.unit);
+                return (
+                <li key={`shopping-${key}`}>
                   <label>
-                    <input type="checkbox" checked={selectedIngredientNames.includes(name)} onChange={() => toggleDetailIngredient(name)} />
-                    <span>{name}</span>
+                    <input type="checkbox" checked={selectedIngredientKeys.includes(key)} onChange={() => toggleDetailIngredient(key)} />
+                    <span>{item.name}</span>
+                    <small>{formatShoppingListAmount(item)}</small>
                   </label>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </section>
 
@@ -1930,6 +1966,59 @@ function MealDetailModal({
 
 function getUniqueIngredientNames(meal: MealCandidate) {
   return Array.from(new Set(meal.items.flatMap((item) => item.ingredients.map((ingredient) => ingredient.food.name))));
+}
+
+function buildShoppingListItemsFromDailyPlan(plan: DailyMealPlan) {
+  return buildShoppingListItemsFromMeals(plan.slots.flatMap((slot) => (slot.meal ? [slot.meal] : [])));
+}
+
+function buildShoppingListItemsFromMeals(meals: MealCandidate[]) {
+  return mergeShoppingListItems([], meals.flatMap((meal) => meal.items.flatMap((item) => item.ingredients.map(ingredientToShoppingListItem))));
+}
+
+function ingredientToShoppingListItem(ingredient: MealIngredient): ShoppingListItem {
+  return {
+    name: ingredient.food.name,
+    quantity: roundShoppingQuantity(ingredient.serving),
+    unit: ingredient.food.servingUnit,
+    checked: false,
+  };
+}
+
+function mergeShoppingListItems(currentItems: ShoppingListItem[], additions: ShoppingListItem[]) {
+  const itemMap = new Map<string, ShoppingListItem>();
+  for (const item of currentItems) {
+    itemMap.set(shoppingItemKey(item.name, item.unit), { ...item });
+  }
+  for (const item of additions) {
+    const key = shoppingItemKey(item.name, item.unit);
+    const current = itemMap.get(key);
+    if (current) {
+      itemMap.set(key, {
+        ...current,
+        quantity: roundShoppingQuantity(current.quantity + item.quantity),
+      });
+    } else {
+      itemMap.set(key, { ...item, checked: false });
+    }
+  }
+  return Array.from(itemMap.values());
+}
+
+function shoppingItemKey(name: string, unit: string) {
+  return `${name.trim()}__${unit.trim()}`;
+}
+
+function formatShoppingListAmount(item: ShoppingListItem) {
+  return `${formatShoppingQuantity(item.quantity)}${item.unit}`;
+}
+
+function formatShoppingQuantity(value: number) {
+  return Number.isInteger(value) ? `${value}` : `${roundShoppingQuantity(value)}`;
+}
+
+function roundShoppingQuantity(value: number) {
+  return Math.round(value * 10) / 10;
 }
 
 function getMealRecipeUrl(meal: MealCandidate) {
@@ -2719,9 +2808,12 @@ function normalizeShoppingList(value: unknown): ShoppingListItem[] {
   for (const item of value) {
     if (!isRecord(item) || typeof item.name !== 'string') continue;
     const name = item.name.trim();
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    items.push({ name, checked: item.checked === true });
+    const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) && item.quantity > 0 ? item.quantity : 1;
+    const unit = typeof item.unit === 'string' ? item.unit.trim() : '';
+    const key = shoppingItemKey(name, unit);
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    items.push({ name, quantity: roundShoppingQuantity(quantity), unit, checked: item.checked === true });
   }
   return items;
 }
