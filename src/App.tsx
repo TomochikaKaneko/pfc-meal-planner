@@ -1,14 +1,18 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BookOpen, ChefHat, CircleHelp, History, Home, Plus, RefreshCw, Save, ShoppingCart, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, ChefHat, CircleHelp, History, Home, Plus, RefreshCw, Save, ShoppingCart, Sparkles, Star, Trash2 } from 'lucide-react';
 import { initialFoods } from './data/foods';
 import { createMealCandidates } from './logic/mealPlanner';
 import { storageKeys } from './storage/storageKeys';
 import {
   appendGeneratedMealHistory,
+  appendFavoriteMeal,
   appendMealHistory,
+  clearFavoriteMeals,
   clearGeneratedMealHistory,
+  deleteFavoriteMealItem,
   deleteGeneratedMealHistoryItem,
+  loadFavoriteMeals,
   loadGeneratedMealHistory,
   loadMealHistory,
   readStorageJson,
@@ -164,7 +168,7 @@ const emptyFoodForm = {
   tags: '',
 };
 
-type Tab = 'home' | 'results' | 'foods' | 'shopping' | 'history' | 'guide';
+type Tab = 'home' | 'results' | 'foods' | 'shopping' | 'history' | 'favorites' | 'guide';
 
 interface ShoppingListItem {
   name: string;
@@ -189,6 +193,7 @@ export function App() {
   const [results, setResults] = useState<MealCandidate[]>([]);
   const [dailyPlan, setDailyPlan] = useState<DailyMealPlan | null>(null);
   const [generatedHistoryItems, setGeneratedHistoryItems] = useState<GeneratedMealHistoryItem[]>(() => loadGeneratedMealHistory().items);
+  const [favoriteMealItems, setFavoriteMealItems] = useState<GeneratedMealHistoryItem[]>(() => loadFavoriteMeals().items);
   const [hasGeneratedResults, setHasGeneratedResults] = useState(false);
   const [foodForm, setFoodForm] = useState(emptyFoodForm);
   const [updateReady, setUpdateReady] = useState(false);
@@ -208,6 +213,8 @@ export function App() {
   const [draftTags, setDraftTags] = useState<ConditionTag[]>([]);
   const [selectedMeal, setSelectedMeal] = useState<MealCandidate | null>(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<GeneratedMealHistoryItem | null>(null);
+  const [selectedFavoriteItem, setSelectedFavoriteItem] = useState<GeneratedMealHistoryItem | null>(null);
+  const [favoriteMessage, setFavoriteMessage] = useState('');
   const [shouldScrollToResults, setShouldScrollToResults] = useState(false);
   const resultsTopRef = useRef<HTMLDivElement | null>(null);
   const isPlanning = planningSource !== null;
@@ -519,6 +526,25 @@ export function App() {
     setShoppingListMessage(count > 0 ? `${count}件を買い物リストに反映しました` : '追加できる食材がありません');
   }
 
+
+  function addCurrentPlanToFavorites() {
+    const item = createGeneratedMealItemSnapshot({
+      mode: mealPlanMode,
+      multiMealPeriod,
+      target: mealInput,
+      condition: freeCondition,
+      meals: dailyPlan ? dailyPlan.slots.flatMap((slot) => (slot.meal ? [slot.meal] : [])) : results,
+      dailyPlan: dailyPlan ?? undefined,
+    });
+    if (!item) {
+      setFavoriteMessage('お気に入り登録できる献立がありません');
+      return;
+    }
+    const result = appendFavoriteMeal(item);
+    setFavoriteMealItems(result.storage.items);
+    setFavoriteMessage(result.added ? 'お気に入りに登録しました' : 'すでにお気に入り登録済みです');
+  }
+
   function toggleShoppingItem(name: string, unit: string) {
     updateShoppingList(shoppingList.map((item) => (shoppingItemKey(item.name, item.unit) === shoppingItemKey(name, unit) ? { ...item, checked: !item.checked } : item)));
   }
@@ -561,6 +587,46 @@ export function App() {
     startMealGeneration(item.target, item.condition, 'replan', item.mode, item.multiMealPeriod ?? 'day');
   }
 
+
+  function redisplaySavedMealItem(item: GeneratedMealHistoryItem) {
+    setDailyPlan(item.dailyPlan ?? null);
+    setResults(item.dailyPlan ? [] : item.meals);
+    setMealPlanMode(item.mode);
+    setMultiMealPeriod(item.multiMealPeriod ?? 'day');
+    updateTargetsForMode(item.mode, item.target);
+    setFreeCondition(item.condition);
+    writeStorageJson(FREE_CONDITION_KEY, item.condition);
+    setHasGeneratedResults(true);
+    setSelectedHistoryItem(null);
+    setSelectedFavoriteItem(null);
+    setSelectedMeal(null);
+    setShouldScrollToResults(true);
+    setTab('results');
+  }
+
+  function replanFromSavedMealItem(item: GeneratedMealHistoryItem) {
+    updateTargetsForMode(item.mode, item.target);
+    setMealPlanMode(item.mode);
+    setMultiMealPeriod(item.multiMealPeriod ?? 'day');
+    setFreeCondition(item.condition);
+    writeStorageJson(FREE_CONDITION_KEY, item.condition);
+    setSelectedHistoryItem(null);
+    setSelectedFavoriteItem(null);
+    startMealGeneration(item.target, item.condition, 'replan', item.mode, item.multiMealPeriod ?? 'day');
+  }
+
+  function addHistoryItemToFavorites(item: GeneratedMealHistoryItem) {
+    const result = appendFavoriteMeal(item);
+    setFavoriteMealItems(result.storage.items);
+    window.alert(result.added ? 'お気に入りに登録しました' : 'すでにお気に入り登録済みです');
+  }
+
+  function addSavedMealToShoppingList(item: GeneratedMealHistoryItem) {
+    const items = buildShoppingListItemsFromGeneratedItem(item);
+    const count = addShoppingItems(items);
+    window.alert(count > 0 ? `${count}件を買い物リストに追加しました` : '追加できる食材がありません');
+  }
+
   function deleteHistoryItem(id: string) {
     if (!window.confirm('この履歴を削除しますか？')) return;
     setGeneratedHistoryItems(deleteGeneratedMealHistoryItem(id).items);
@@ -571,6 +637,19 @@ export function App() {
     if (!window.confirm('履歴をすべて削除しますか？')) return;
     setGeneratedHistoryItems(clearGeneratedMealHistory().items);
     setSelectedHistoryItem(null);
+  }
+
+
+  function deleteFavoriteItem(id: string) {
+    if (!window.confirm('このお気に入りを解除しますか？')) return;
+    setFavoriteMealItems(deleteFavoriteMealItem(id).items);
+    setSelectedFavoriteItem(null);
+  }
+
+  function clearFavoriteItems() {
+    if (!window.confirm('お気に入りをすべて削除しますか？')) return;
+    setFavoriteMealItems(clearFavoriteMeals().items);
+    setSelectedFavoriteItem(null);
   }
 
   return (
@@ -699,7 +778,12 @@ export function App() {
                   <ShoppingCart size={18} />
                   買い物リストを作成
                 </button>
+                <button className="secondary-action" type="button" onClick={addCurrentPlanToFavorites}>
+                  <Star size={18} />
+                  お気に入り登録
+                </button>
                 {shoppingListMessage && <p className="shopping-add-note">{shoppingListMessage}</p>}
+                {favoriteMessage && <p className="shopping-add-note">{favoriteMessage}</p>}
               </section>
             )}
 
@@ -890,6 +974,14 @@ export function App() {
           />
         )}
 
+        {tab === 'favorites' && (
+          <FavoriteMealScreen
+            items={favoriteMealItems}
+            onOpen={setSelectedFavoriteItem}
+            onClear={clearFavoriteItems}
+          />
+        )}
+
         {tab === 'guide' && (
           <section className="stack">
             <div className="section-title">
@@ -976,18 +1068,32 @@ export function App() {
         <HistoryDetailModal
           item={selectedHistoryItem}
           onClose={() => setSelectedHistoryItem(null)}
-          onRedisplay={redisplayHistoryItem}
-          onReplan={replanFromHistoryItem}
+          onRedisplay={redisplaySavedMealItem}
+          onReplan={replanFromSavedMealItem}
           onDelete={deleteHistoryItem}
+          onFavorite={addHistoryItemToFavorites}
         />
       )}
 
+
+      {selectedFavoriteItem && (
+        <HistoryDetailModal
+          item={selectedFavoriteItem}
+          onClose={() => setSelectedFavoriteItem(null)}
+          onRedisplay={redisplaySavedMealItem}
+          onReplan={replanFromSavedMealItem}
+          onDelete={deleteFavoriteItem}
+          onAddShoppingList={addSavedMealToShoppingList}
+          deleteLabel="お気に入り解除"
+        />
+      )}
       <nav className="bottom-nav" aria-label="主要ナビゲーション">
         <NavButton active={tab === 'home'} icon={<Home size={20} />} label="ホーム" onClick={() => setTab('home')} />
         <NavButton active={tab === 'results'} icon={<ChefHat size={20} />} label="結果" onClick={() => setTab('results')} />
         <NavButton active={tab === 'foods'} icon={<BookOpen size={20} />} label="食品" onClick={() => setTab('foods')} />
         <NavButton active={tab === 'shopping'} icon={<ShoppingCart size={20} />} label="買い物" onClick={() => setTab('shopping')} />
         <NavButton active={tab === 'history'} icon={<History size={20} />} label="履歴" onClick={() => setTab('history')} />
+        <NavButton active={tab === 'favorites'} icon={<Star size={20} />} label="お気に入り" onClick={() => setTab('favorites')} />
         <NavButton active={tab === 'guide'} icon={<CircleHelp size={20} />} label="使い方" onClick={() => setTab('guide')} />
       </nav>
       {isTagSelectorOpen && (
@@ -1688,18 +1794,70 @@ function MealHistoryScreen({
   );
 }
 
+function FavoriteMealScreen({
+  items,
+  onOpen,
+  onClear,
+}: {
+  items: GeneratedMealHistoryItem[];
+  onOpen: (item: GeneratedMealHistoryItem) => void;
+  onClear: () => void;
+}) {
+  return (
+    <section className="stack history-screen">
+      <div className="section-title">
+        <h2>お気に入り</h2>
+        <span>{items.length}件</span>
+      </div>
+
+      {items.length > 0 && (
+        <button className="secondary-action danger-action" type="button" onClick={onClear}>
+          お気に入りを全削除
+        </button>
+      )}
+
+      {items.length === 0 ? (
+        <div className="empty-state">
+          <Star size={36} />
+          <p>お気に入りはまだありません。また食べたい献立を結果画面や履歴から登録できます。</p>
+        </div>
+      ) : (
+        <div className="history-list">
+          {items.map((item) => (
+            <button className="history-card" type="button" key={item.id} onClick={() => onOpen(item)}>
+              <span className="history-date">{formatHistoryDate(item.createdAt)}</span>
+              <strong>{formatHistoryTitles(item.mealTitles)}</strong>
+              <span className="history-kcal">{Math.round(item.total.kcal)}kcal</span>
+              <span className="history-macros">
+                P{roundMacro(item.total.protein)} F{roundMacro(item.total.fat)} C{roundMacro(item.total.carb)}
+              </span>
+              <span className="history-title">{historyModeLabel(item)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function HistoryDetailModal({
   item,
   onClose,
   onRedisplay,
   onReplan,
   onDelete,
+  onFavorite,
+  onAddShoppingList,
+  deleteLabel = '削除',
 }: {
   item: GeneratedMealHistoryItem;
   onClose: () => void;
   onRedisplay: (item: GeneratedMealHistoryItem) => void;
   onReplan: (item: GeneratedMealHistoryItem) => void;
   onDelete: (id: string) => void;
+  onFavorite?: (item: GeneratedMealHistoryItem) => void;
+  onAddShoppingList?: (item: GeneratedMealHistoryItem) => void;
+  deleteLabel?: string;
 }) {
   useEffect(() => {
     const scrollY = window.scrollY;
@@ -1719,6 +1877,8 @@ function HistoryDetailModal({
       window.scrollTo(0, scrollY);
     };
   }, []);
+
+  const shoppingIngredients = buildShoppingListItemsFromGeneratedItem(item);
 
   return (
     <div className="modal-backdrop detail-backdrop" onClick={onClose}>
@@ -1791,6 +1951,18 @@ function HistoryDetailModal({
             )}
           </section>
 
+          <section className="detail-section">
+            <h3>食材</h3>
+            <ul className="ingredient-list">
+              {shoppingIngredients.map((ingredient) => (
+                <li key={`saved-detail-${shoppingItemKey(ingredient.name, ingredient.unit)}`}>
+                  <span>{ingredient.name}</span>
+                  <small>{formatShoppingListAmount(ingredient)}</small>
+                </li>
+              ))}
+            </ul>
+          </section>
+
           <section className="detail-section history-actions">
             <button className="primary-action compact-action" type="button" onClick={() => onRedisplay(item)}>
               この献立を再表示
@@ -1798,8 +1970,18 @@ function HistoryDetailModal({
             <button className="secondary-action" type="button" onClick={() => onReplan(item)}>
               この条件で再提案
             </button>
+            {onFavorite && (
+              <button className="secondary-action" type="button" onClick={() => onFavorite(item)}>
+                お気に入り登録
+              </button>
+            )}
+            {onAddShoppingList && (
+              <button className="secondary-action" type="button" onClick={() => onAddShoppingList(item)}>
+                買い物リストを作成
+              </button>
+            )}
             <button className="secondary-action danger-action" type="button" onClick={() => onDelete(item.id)}>
-              削除
+              {deleteLabel}
             </button>
           </section>
         </div>
@@ -1992,6 +2174,10 @@ function buildShoppingListItemsFromDailyPlan(plan: DailyMealPlan) {
   return buildShoppingListItemsFromMeals(plan.slots.flatMap((slot) => (slot.meal ? [slot.meal] : [])));
 }
 
+function buildShoppingListItemsFromGeneratedItem(item: GeneratedMealHistoryItem) {
+  return item.dailyPlan ? buildShoppingListItemsFromDailyPlan(item.dailyPlan) : buildShoppingListItemsFromMeals(item.meals);
+}
+
 function buildShoppingListItemsFromMeals(meals: MealCandidate[]) {
   return mergeShoppingListItems([], meals.flatMap((meal) => meal.items.flatMap(expandMealItemToShoppingItems)));
 }
@@ -2170,6 +2356,41 @@ function formatHistoryTitles(titles: string[]) {
   if (titles.length === 0) return '献立';
   const visibleTitles = titles.slice(0, 3).join('、');
   return titles.length > 3 ? `${visibleTitles}…` : visibleTitles;
+}
+
+function createGeneratedMealItemSnapshot({
+  mode,
+  multiMealPeriod,
+  target,
+  condition,
+  meals,
+  dailyPlan,
+}: {
+  mode: MealPlanMode;
+  multiMealPeriod?: MultiMealPeriod;
+  target: MealInput;
+  condition: string;
+  meals: MealCandidate[];
+  dailyPlan?: DailyMealPlan;
+}): GeneratedMealHistoryItem | null {
+  if (meals.length === 0 && !dailyPlan) return null;
+  const mealTitles = dailyPlan
+    ? dailyPlan.slots.flatMap((slot) => (slot.meal ? [slot.meal.title] : []))
+    : meals.map((meal) => meal.title);
+  const total = dailyPlan?.totals ?? meals[0]?.totals ?? { kcal: 0, protein: 0, fat: 0, carb: 0 };
+  return {
+    id: `favorite-source-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString(),
+    mode,
+    multiMealPeriod,
+    condition,
+    target,
+    total,
+    title: formatHistoryTitles(mealTitles) || '献立',
+    mealTitles,
+    meals,
+    dailyPlan,
+  };
 }
 
 function MacroResult({ field, meal }: { field: (typeof macroFields)[number]; meal: MealCandidate }) {

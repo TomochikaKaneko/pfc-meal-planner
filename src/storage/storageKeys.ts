@@ -8,4 +8,5 @@ export const storageKeys = {
   shoppingList: 'pfcMealPlanner.shoppingList',
   mealHistory: 'pfcMealPlanner.mealHistory',
   generatedMealHistory: 'pfcMealPlanner.generatedMealHistory',
+  favoriteMeals: 'pfcMealPlanner.favoriteMeals',
 } as const;

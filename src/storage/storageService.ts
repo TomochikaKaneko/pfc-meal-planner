@@ -16,6 +16,8 @@ const MEAL_HISTORY_SCHEMA_VERSION = 1;
 const MEAL_HISTORY_LIMIT = 30;
 const GENERATED_MEAL_HISTORY_SCHEMA_VERSION = 1;
 const GENERATED_MEAL_HISTORY_LIMIT = 100;
+const FAVORITE_MEAL_SCHEMA_VERSION = 1;
+const FAVORITE_MEAL_LIMIT = 100;
 
 export function readStorageJson<T>(key: string, fallback: T): T {
   try {
@@ -130,6 +132,49 @@ export function clearGeneratedMealHistory() {
   return next;
 }
 
+export function loadFavoriteMeals(): GeneratedMealHistoryStorage {
+  return normalizeFavoriteMeals(readStorageJson<unknown>(storageKeys.favoriteMeals, null));
+}
+
+export function appendFavoriteMeal(item: GeneratedMealHistoryItem) {
+  const current = loadFavoriteMeals();
+  const fingerprint = generatedMealFingerprint(item);
+  if (current.items.some((favorite) => generatedMealFingerprint(favorite) === fingerprint)) {
+    return { storage: current, added: false };
+  }
+
+  const nextItem: GeneratedMealHistoryItem = {
+    ...item,
+    id: createFavoriteMealId(),
+    createdAt: new Date().toISOString(),
+  };
+  const next: GeneratedMealHistoryStorage = {
+    schemaVersion: FAVORITE_MEAL_SCHEMA_VERSION,
+    items: [nextItem, ...current.items].slice(0, FAVORITE_MEAL_LIMIT),
+  };
+  writeStorageJson(storageKeys.favoriteMeals, next);
+  return { storage: next, added: true };
+}
+
+export function deleteFavoriteMealItem(id: string) {
+  const current = loadFavoriteMeals();
+  const next: GeneratedMealHistoryStorage = {
+    schemaVersion: FAVORITE_MEAL_SCHEMA_VERSION,
+    items: current.items.filter((item) => item.id !== id),
+  };
+  writeStorageJson(storageKeys.favoriteMeals, next);
+  return next;
+}
+
+export function clearFavoriteMeals() {
+  const next: GeneratedMealHistoryStorage = {
+    schemaVersion: FAVORITE_MEAL_SCHEMA_VERSION,
+    items: [],
+  };
+  writeStorageJson(storageKeys.favoriteMeals, next);
+  return next;
+}
+
 function normalizeMealHistory(value: unknown): MealHistoryStorage {
   if (!isRecord(value) || value.schemaVersion !== MEAL_HISTORY_SCHEMA_VERSION || !Array.isArray(value.items)) {
     return { schemaVersion: MEAL_HISTORY_SCHEMA_VERSION, items: [] };
@@ -171,6 +216,24 @@ function normalizeGeneratedMealHistory(value: unknown): GeneratedMealHistoryStor
       .map(normalizeGeneratedMealHistoryItem)
       .filter((item): item is GeneratedMealHistoryItem => item !== null)
       .slice(0, GENERATED_MEAL_HISTORY_LIMIT),
+  };
+}
+
+function normalizeFavoriteMeals(value: unknown): GeneratedMealHistoryStorage {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== FAVORITE_MEAL_SCHEMA_VERSION ||
+    !Array.isArray(value.items)
+  ) {
+    return { schemaVersion: FAVORITE_MEAL_SCHEMA_VERSION, items: [] };
+  }
+
+  return {
+    schemaVersion: FAVORITE_MEAL_SCHEMA_VERSION,
+    items: value.items
+      .map(normalizeGeneratedMealHistoryItem)
+      .filter((item): item is GeneratedMealHistoryItem => item !== null)
+      .slice(0, FAVORITE_MEAL_LIMIT),
   };
 }
 
@@ -246,4 +309,19 @@ function createHistoryId(index: number) {
 
 function createGeneratedHistoryId() {
   return `generated-meal-history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createFavoriteMealId() {
+  return `favorite-meal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function generatedMealFingerprint(item: GeneratedMealHistoryItem) {
+  return JSON.stringify({
+    mode: item.mode,
+    multiMealPeriod: item.multiMealPeriod ?? null,
+    condition: item.condition,
+    target: item.target,
+    total: item.total,
+    mealTitles: item.mealTitles,
+  });
 }
