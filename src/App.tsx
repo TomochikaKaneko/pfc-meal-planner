@@ -2309,18 +2309,56 @@ function dailyPlanCombinationScore(input: MealInput, slots: PlannedMealSlot[], d
 }
 
 function dailyMacroBalanceScore(totals: MacroProfile, input: MealInput) {
-  const scoreTargets: Array<{ key: MacroKey; tolerance: number; weight: number }> = [
-    { key: 'kcal', tolerance: 0.1, weight: 1400 },
-    { key: 'protein', tolerance: 0.1, weight: 1200 },
-    { key: 'fat', tolerance: 0.15, weight: 1000 },
-    { key: 'carb', tolerance: 0.15, weight: 1000 },
-  ];
-  return scoreTargets.reduce((score, target) => {
-    const value = input[target.key];
-    if (value === null || value <= 0) return score;
-    const ratioError = Math.abs(totals[target.key] - value) / value;
-    return score - Math.pow(ratioError / target.tolerance, 2) * target.weight;
-  }, 12000);
+  let score = 14000;
+
+  if (input.fat !== null && input.fat > 0) {
+    score -= dailyFatPriorityPenalty(totals.fat - input.fat);
+  }
+  if (input.protein !== null && input.protein > 0) {
+    score -= dailyProteinPriorityPenalty(totals.protein - input.protein);
+  }
+  if (input.kcal !== null && input.kcal > 0) {
+    score -= dailyCaloriePriorityPenalty(totals.kcal - input.kcal);
+  }
+  if (input.carb !== null && input.carb > 0) {
+    score -= dailyCarbPriorityPenalty(totals.carb - input.carb, input.carb);
+  }
+
+  return score;
+}
+
+function dailyFatPriorityPenalty(diff: number) {
+  const absDiff = Math.abs(diff);
+  if (absDiff <= 5) return absDiff * 24;
+  if (absDiff <= 10) return 120 + (absDiff - 5) * 170;
+  return 970 + (absDiff - 10) * 360 + Math.pow(absDiff - 10, 2) * 70;
+}
+
+function dailyProteinPriorityPenalty(diff: number) {
+  if (diff >= -10 && diff <= 20) return Math.abs(diff) * 18;
+  if (diff < -10) {
+    const shortage = Math.abs(diff) - 10;
+    return 180 + shortage * 150 + Math.pow(shortage, 2) * 30;
+  }
+  const excess = diff - 20;
+  return 360 + excess * 110 + Math.pow(excess, 2) * 18;
+}
+
+function dailyCaloriePriorityPenalty(diff: number) {
+  if (diff >= -200 && diff <= 100) return Math.abs(diff) * 1.1;
+  if (diff < -200) {
+    const shortage = Math.abs(diff) - 200;
+    return 220 + shortage * 6 + Math.pow(shortage / 50, 2) * 180;
+  }
+  const excess = diff - 100;
+  return 110 + excess * 8 + Math.pow(excess / 50, 2) * 220;
+}
+
+function dailyCarbPriorityPenalty(diff: number, target: number) {
+  const ratioError = Math.abs(diff) / target;
+  if (ratioError <= 0.15) return ratioError * 500;
+  if (ratioError <= 0.25) return 75 + (ratioError - 0.15) * 1800;
+  return 255 + (ratioError - 0.25) * 2400;
 }
 
 function dailyDirectMatchTerms(freeTerms: string[], slotPools: DailySlotCandidatePool[]) {
