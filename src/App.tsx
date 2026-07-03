@@ -1611,18 +1611,30 @@ function ShoppingListScreen({
             </button>
           </div>
           <ul className="shopping-list saved" aria-label="買い物リスト">
-            {items.map((item) => (
-              <li key={shoppingItemKey(item.name, item.unit)} className={item.checked ? 'checked' : ''}>
-                <label>
-                  <input type="checkbox" checked={item.checked} onChange={() => onToggle(item.name, item.unit)} />
-                  <span>{item.name}</span>
-                  <small>{formatShoppingListAmount(item)}</small>
-                </label>
-                <button className="text-button danger-text" type="button" onClick={() => onDelete(item.name, item.unit)}>
-                  削除
-                </button>
-              </li>
-            ))}
+            {items.map((item) => {
+              const key = shoppingItemKey(item.name, item.unit);
+              const checkboxId = shoppingItemInputId('shopping-item', item.name, item.unit);
+              return (
+                <li key={key} className={item.checked ? 'checked' : ''}>
+                  <div className="shopping-list-row-main">
+                    <input
+                      id={checkboxId}
+                      className="shopping-checkbox"
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={() => onToggle(item.name, item.unit)}
+                    />
+                    <label className="shopping-item-label" htmlFor={checkboxId}>
+                      <span>{item.name}</span>
+                      <small>{formatShoppingListAmount(item)}</small>
+                    </label>
+                  </div>
+                  <button className="text-button danger-text" type="button" onClick={() => onDelete(item.name, item.unit)}>
+                    削除
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
@@ -1930,14 +1942,21 @@ function MealDetailModal({
             <ul className="shopping-list" aria-label="買い物リスト">
               {shoppingIngredients.map((item) => {
                 const key = shoppingItemKey(item.name, item.unit);
+                const checkboxId = shoppingItemInputId('detail-shopping-item', item.name, item.unit);
                 return (
-                <li key={`shopping-${key}`}>
-                  <label>
-                    <input type="checkbox" checked={selectedIngredientKeys.includes(key)} onChange={() => toggleDetailIngredient(key)} />
-                    <span>{item.name}</span>
-                    <small>{formatShoppingListAmount(item)}</small>
-                  </label>
-                </li>
+                  <li key={`shopping-${key}`} className="shopping-select-row">
+                    <input
+                      id={checkboxId}
+                      className="shopping-checkbox"
+                      type="checkbox"
+                      checked={selectedIngredientKeys.includes(key)}
+                      onChange={() => toggleDetailIngredient(key)}
+                    />
+                    <label className="shopping-item-label" htmlFor={checkboxId}>
+                      <span>{item.name}</span>
+                      <small>{formatShoppingListAmount(item)}</small>
+                    </label>
+                  </li>
                 );
               })}
             </ul>
@@ -2096,6 +2115,13 @@ function mergeShoppingListItems(currentItems: ShoppingListItem[], additions: Sho
 
 function shoppingItemKey(name: string, unit: string) {
   return `${name.trim()}__${unit.trim()}`;
+}
+
+function shoppingItemInputId(prefix: string, name: string, unit: string) {
+  const stableKey = Array.from(shoppingItemKey(name, unit))
+    .map((char) => char.charCodeAt(0).toString(36))
+    .join('-');
+  return `${prefix}-${stableKey}`;
 }
 
 function formatShoppingListAmount(item: ShoppingListItem) {
